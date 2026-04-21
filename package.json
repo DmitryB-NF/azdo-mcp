@@ -1,0 +1,10 @@
+{
+  "name": "azdo-mcp",
+  "version": "0.1.0",
+  "author": "DmitryB",
+  "private": true,
+  "description": "Personal MCP server that makes Azure DevOps operable from within Claude Code. A minimal set of primitives plus a library of Claude Skills — the first MCP+Skills stack for Azure DevOps.",
+  "scripts": {
+    "install:bmad": "npx bmad-method@6.3.0 install"
+  }
+}

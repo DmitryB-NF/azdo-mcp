@@ -1,0 +1,8 @@
+# BMAD tooling overlay (installer regenerates; personal configs live inside)
+_bmad/
+
+# Personal Claude Code settings
+.claude/settings.local.json
+
+# BMAD-installed skills (boilerplate; regenerate via `pnpm install:bmad`)
+.claude/skills/bmad-*
