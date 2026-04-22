@@ -1,3 +1,7 @@
+# Environment / secrets — placeholder .env was committed once for variable
+# discoverability; real values are populated locally and must never land here.
+.env
+
 # BMAD tooling overlay (installer regenerates; personal configs live inside)
 _bmad/
 
