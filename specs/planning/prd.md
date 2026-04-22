@@ -126,7 +126,7 @@ Not a platform MVP (no ecosystem ambition in MVP), not a revenue MVP (non-commer
 - `list_work_items` — batch fetch by iteration / priority / WIQL / explicit ID list
 - `create_work_item` — create with full field control
 - `add_comment` — post Markdown-formatted comment on a work item
-- `list_team_iterations` — enumerate iterations for resolution
+- `list_recent_iterations` — last N iterations by start date (MS `work_list_team_iterations` bulk-wired for timeframe enumeration)
 
 **Claude Skills (5):**
 
@@ -170,13 +170,13 @@ Added organically as real pain emerges:
 
 **Opening scene.** Friday evening, sprint 34 just closed. Previously, Dmitry would open six Azure DevOps tabs, filter the board by iteration, click into each of twenty-three work items in turn, skim descriptions, type titles into a note-taking app, curse at the formatting, paste into a comment box on the epic, and publish. Thirty minutes of tab-switching, none of it thinking. This time, the board tab isn't open.
 
-**Rising action.** Dmitry opens Claude Code, types `/azdo-sprint-report`. Claude reads the skill's markdown, asks for the target iteration (offers "current" as default), invokes `list_team_iterations` to resolve the GUID, then `list_work_items` to get 23 IDs, then `get_work_items` (batched) to fetch title/description/priority/state for each. Claude returns a markdown draft — grouped by state (Done / In Progress / Blocked), sorted by priority, one-line summaries per item. Dmitry reads it: accurate. He says "publish it as a comment on epic 4521." Claude calls `add_comment`. Done.
+**Rising action.** Dmitry opens Claude Code, types `/azdo-sprint-report`. Claude reads the skill's markdown, asks for the target iteration (offers "current" as default), builds WIQL with `@CurrentIteration('[project]\team')` and runs `wit_query_by_wiql` to get 23 IDs, then `wit_get_work_items_batch_by_ids` to fetch title/description/priority/state for each. Claude returns a markdown draft — grouped by state (Done / In Progress / Blocked), sorted by priority, one-line summaries per item. Dmitry reads it: accurate. He says "publish it as a comment on epic 4521." Claude calls `add_comment`. Done.
 
 **Climax.** The whole exchange took 90 seconds of wall-clock time and zero browser tabs. Dmitry checks the comment in Azure DevOps once, out of reflex — it's there, perfectly formatted, Markdown rendered correctly via Microsoft's api-version 7.2-preview.4 workaround he doesn't think about.
 
 **Resolution.** He closes Claude Code and goes home. The 30-minute weekly chore is now a slash-command. The product works.
 
-**Reveals requirements for:** `list_team_iterations`, `list_work_items` (iteration filter), `get_work_items` (batch, field selection), `add_comment` (Markdown format), and the orchestrating `/azdo-sprint-report` skill with intent collection (target iteration, publish target).
+**Reveals requirements for:** `list_recent_iterations` (sprint-report's "last N sprints" scenario), MS-inherited `wit_query_by_wiql` + `wit_get_work_items_batch_by_ids` (query → batch read), `add_comment` (Markdown format), and the orchestrating `/azdo-sprint-report` skill with intent collection (target iteration, publish target).
 
 ### Journey 2 — Dmitry, Follow-Up Ticket Composition
 
@@ -218,7 +218,7 @@ Added organically as real pain emerges:
 
 | Capability area | Journeys that require it | Source primitive / skill |
 |---|---|---|
-| Iteration resolution (current / by name / by ID) | 1 | `list_team_iterations` |
+| Iteration resolution (current / by name / by ID) | 1 | WIQL `@CurrentIteration('[project]\team')` (via `wit_query_by_wiql`) for the skill-layer default; `list_recent_iterations` + MS `work_list_team_iterations` when a skill needs explicit enumeration |
 | Batch work-item fetch by iteration | 1 | `list_work_items` |
 | Batch work-item fetch with field selection | 1, 2 | `get_work_items` (via MS batch) |
 | Single work-item fetch with linked-items | 2 | `get_work_item` |
@@ -271,7 +271,7 @@ Consolidated from innovation analysis and scoping exercise. All risks tracked wi
 
 ### Resource Risks
 
-- **5-hour budget overrun.** **Mitigation:** pre-committed scope cuts in priority order: first drop `create_work_item` complexity (fields/links), then drop `/azdo-create-ticket` skill, then drop secondary skills. The sprint-report path (`list_team_iterations`, `list_work_items`, `add_comment`, `/azdo-sprint-report`) is load-bearing and stays.
+- **5-hour budget overrun.** **Mitigation:** pre-committed scope cuts in priority order: first drop `create_work_item` complexity (fields/links), then drop `/azdo-create-ticket` skill, then drop secondary skills. The sprint-report path (`list_recent_iterations`, MS `wit_query_by_wiql` + `wit_get_work_items_batch_by_ids`, `add_comment`, `/azdo-sprint-report`) is load-bearing and stays.
 - **Fatigue / context loss mid-build.** **Mitigation:** scaffolding-first (30 min); primitives one-at-a-time with MCP Inspector validation; each 45-minute block ends with a working-state checkpoint.
 
 ## cli_tool-Specific Requirements (MCP Server Adaptation)
@@ -298,7 +298,7 @@ AzDo MCP is a local MCP server: a Node/TypeScript process invoked by Claude Code
 | `list_work_items` | `{ criteria: { iteration?: string, priority?: number, wiql?: string, ids?: number[] }, fields?: string[] }` | Array of work item JSONs (batch-fetched) |
 | `create_work_item` | `{ project: string, type: string, title: string, description?: string, fields?: Record<string,any>, links?: Array<{id, type}> }` | Created work item ID + URL |
 | `add_comment` | `{ workItemId: number, comment: string, format?: "Markdown" \| "Html" }` | Comment ID |
-| `list_team_iterations` | `{ project?: string, team?: string, timeframe?: "current" \| "past" \| "future" }` | Array of iteration objects (id, name, path, dates) |
+| `list_recent_iterations` | `{ project: string, team: string, limit?: number (positive int, default 2) }` | Array of iteration objects (id, name, path, attributes) sorted by `startDate` descending; timeframe filtering delegated to MS-inherited `work_list_team_iterations` via bulk-wired `configureWorkTools` |
 
 **Deep-imported from `@azure-devops/mcp@2.6.0`:**
 

@@ -240,7 +240,7 @@ Tool registration pattern, provider pattern for deep-import, input validation, e
 
 - **Tool module convention.** Each domain = one file in `src/tools/` exporting (a) pure async functions that take `(conn: WebApi, params): Promise<T>` and (b) a `register*Tools(server: McpServer)` function. The `register` function is called once from `src/index.ts`. This pattern enables unit-testing pure functions with structural `WebApi` mocks, per NFR-M3.
 - **Provider pattern for deep-import.** `src/client.ts` exports the singleton `getClient()` plus three callable providers (`tokenProvider`, `clientProvider`, `userAgentProvider`) required by Microsoft's `configure*Tools(server, ...)` contract. `clientProvider` is our local binding name; Microsoft's function signature names the corresponding parameter `connectionProvider`. TypeScript accepts positional callers, so the local name is ours to choose. All four pointer-targets live in one file to keep the MS contract local.
-- **File naming convention.** Kebab-case for files (`work-items.ts`), camelCase for functions (`listTeamIterations`), PascalCase for types (`IterationWorkItemResult`). Matches Node/TS ecosystem norms.
+- **File naming convention.** Kebab-case for files (`work-items.ts`), camelCase for functions (`registerIterationTools`, `getClient`), PascalCase for types (`IterationWorkItemResult`). Matches Node/TS ecosystem norms.
 - **Package entry points.** `"type": "module"` (ESM only). No `"main"`/`"exports"`/`"bin"` at MVP — `.mcp.json` spawns `node --env-file=.env --import tsx src/index.ts` directly (pure TS runtime, native `.env` loading). Optional `"bin"` is Phase 2 if published to npm.
 - **Git hooks.** **None at MVP.** No husky, no lint-staged, no pre-commit. Dependency surface minimized. Manual discipline + `.gitignore` cover the secret-commit risk.
 - **Linting / formatting.** **None at MVP.** No Prettier, no ESLint, no style-enforcement tooling. Local-only personal tool — author owns style discipline. Phase 2 if external contributors appear.
@@ -289,7 +289,7 @@ Tool registration pattern, provider pattern for deep-import, input validation, e
 
 **MCP Tool names:**
 
-- Author tools: verb-leading, snake_case, no prefix: `get_work_item`, `list_work_items`, `create_work_item`, `add_comment`, `list_team_iterations`.
+- Author tools: verb-leading, snake_case, no prefix: `create_work_item`, `add_comment`, `list_recent_iterations`, `get_project_context`.
 - Microsoft deep-imported tools keep their upstream prefixes (`wit_*`, `wiki_*`, `work_*`).
 
 **Claude Skill names:**
@@ -310,9 +310,10 @@ src/
 ├── config.ts             # validate process.env (loaded natively by Node --env-file)
 ├── client.ts             # WebApi singleton + three providers for MS deep-import
 └── tools/
-    ├── work-items.ts     # get_work_item, list_work_items, create_work_item
+    ├── work-items.ts     # create_work_item + MS `configureWorkItemTools` bulk-wire (`wit_*`)
     ├── comments.ts       # add_comment
-    └── iterations.ts     # list_team_iterations
+    ├── iterations.ts     # list_recent_iterations + MS `configureWorkTools` bulk-wire (`work_*`)
+    └── project-context.ts # get_project_context
 .claude/skills/
 ├── azdo-fetch-ticket/SKILL.md
 ├── azdo-fetch-tickets/SKILL.md
@@ -511,9 +512,10 @@ azdo-mcp/
 │   ├── config.ts                 # validate env, export typed config object
 │   ├── client.ts                 # WebApi singleton + tokenProvider/clientProvider/userAgentProvider
 │   └── tools/
-│       ├── iterations.ts         # list_team_iterations
-│       ├── work-items.ts         # get_work_item, list_work_items, create_work_item
-│       └── comments.ts           # add_comment
+│       ├── iterations.ts         # list_recent_iterations + MS `configureWorkTools` bulk-wire
+│       ├── work-items.ts         # create_work_item + MS `configureWorkItemTools` bulk-wire
+│       ├── comments.ts           # add_comment
+│       └── project-context.ts    # get_project_context
 └── .claude/
     ├── .mcp.json                 # ready-to-run MCP host entry, relative paths
     └── skills/
@@ -595,7 +597,7 @@ azdo-mcp/
 | Work Item Retrieval | FR1–FR7 | `src/tools/work-items.ts` (`get_work_item`, `list_work_items`) |
 | Work Item Creation | FR8–FR9 | `src/tools/work-items.ts` (`create_work_item`) |
 | Work Item Commenting | FR10–FR11 | `src/tools/comments.ts` (`add_comment`) |
-| Iteration Management | FR12–FR14 | `src/tools/iterations.ts` (`list_team_iterations`) |
+| Iteration Management | FR12–FR14 | `src/tools/iterations.ts` (`list_recent_iterations` + MS `configureWorkTools` bulk-wire → `work_list_team_iterations` covers timeframe) |
 | Skill Orchestration | FR15–FR20 | `.claude/skills/azdo-*/SKILL.md` (five markdown files) |
 | Configuration and Identity | FR21–FR24 | `src/config.ts`, `src/client.ts`, `.env`, `.claude/.mcp.json` |
 | Ecosystem Integration (MS deep-import) | FR25–FR28 | `src/tools/<domain>.ts` wrappers (each calls its MS `configure*Tools` and re-exports as `register<Domain>Tools(server)`), inherits via pnpm dep |

@@ -135,8 +135,8 @@ N/A — AzDo MCP has no UI. All user interaction is through Claude Code's chat i
 | FR9 create with links | Epic 3 | `links` param |
 | FR10 post comment | Epic 3 | `add_comment` primitive |
 | FR11 Markdown format | Epic 3 | `format` param + raw-REST 7.2-preview.4 |
-| FR12 list iterations | Epic 2 | `list_team_iterations` primitive (author-owned, independent of MS `work` domain) |
-| FR13 timeframe filter | Epic 2 | `timeframe` param |
+| FR12 list iterations | Epic 2 | `list_recent_iterations` primitive (author-owned; last N by start date) + MS `work_list_team_iterations` bulk-wired via `configureWorkTools` |
+| FR13 timeframe filter | Epic 2 | MS `work_list_team_iterations` `timeframe` param (inherited via `configureWorkTools`) |
 | FR14 iteration name→GUID | Epic 2 | Claude orchestrates via skill |
 | FR15 skill discovery | Epic 1 | `.claude/skills/` layout established; reinforced every epic |
 | FR16 slash-command trigger | Epic 2/3/4 | Each epic ships invokable skills |
@@ -304,6 +304,8 @@ So that Claude can fetch, query, and comment on real work items through MS-provi
 
 ## Epic 2: Work Item Retrieval — Skill-Based Read Layer
 
+**Status:** Complete (2026-04-22) — Story 2.1 shipped in `4d0ca5f`; Story 2.3 shipped in `a972173` with a design pivot (see story note below); Stories 2.4 and 2.5 merged into 2.1.
+
 Solve the work-item retrieval pain through a single Claude Skill (`/azdo-fetch-tickets`) composed over Microsoft's inherited `wit_*` tools, plus one support tool (`get_project_context`) returning the configured AzDO project and team for team-relative WIQL.
 
 ### Story 2.1: Skill-based read path with project context
@@ -375,33 +377,43 @@ So that every work-item read in Azure DevOps becomes a single chat turn without 
 **When** the user invokes the skill
 **Then** the skill instructs Claude to tell the user the `azdo-mcp` MCP server is not connected and point them at `.claude/.mcp.json`, rather than attempt REST or any other backchannel
 
-### Story 2.3: `list_team_iterations` Primitive
+### Story 2.3: Iteration tooling — `list_recent_iterations` + MS `work` domain bulk-wire
+
+**Shipped with a design pivot** (commit `a972173`). Original AC targeted a single author-owned `list_team_iterations` primitive exposing `{ project?, team?, timeframe? }` with env-default fallbacks. Full rationale and pivot history in [`specs/dev/story-2.3-list-team-iterations.md`](../dev/story-2.3-list-team-iterations.md); summary below.
+
+**Shipped surface:**
+- `list_recent_iterations({ project, team, limit = 2 })` — author-owned. Returns the N most-recent iterations sorted by `attributes.startDate` descending, for the sprint-report "last N sprints" scenario. MS has no top-N primitive, so this is the one place an author wrapper adds value.
+- MS `configureWorkTools` bulk-wired via the shared `src/ms-providers.ts` helpers — exposes `work_list_team_iterations`, `work_list_iterations`, `work_create_iterations`, `work_assign_iterations`, `work_get_team_capacity`, `work_update_team_capacity`, `work_get_iteration_capacities`, `work_get_team_settings`. Covers timeframe-filtered enumeration through the MS-inherited `timeframe: 'current' | 'past' | 'future'` parameter.
+
+**Rationale (compressed):**
+- MS's `work_list_team_iterations` with `timeframe: 'current'` already covers the current-iteration scenario; an author duplicate would be theatre.
+- The AzDO REST API only supports `$timeframe=current` server-side (per `WorkApi.d.ts:338` — "Only Current is supported currently"). `past`/`future` require client-side filtering of the full subscription — no value in rewrapping.
+- `project` and `team` are required (not optional). Skills hardcode them as prompt constants, so env-default substitution was dead code; zod's "missing required field" error is the right signal.
 
 As Claude (via a skill),
-I want to list iterations for a given project and team with optional timeframe filtering,
-So that skills that need explicit iteration enumeration (e.g. "list the last three sprints") can reach it without depending on Claude's WIQL `@CurrentIteration` macro. The `/azdo-fetch-tickets` skill from Story 2.1 does not depend on this tool — it uses `@CurrentIteration('[project]\team')` in WIQL — so Story 2.3 is optional scope. Work on `src/tools/iterations.ts` is tracked on a parallel agent track.
+I want to enumerate iterations for a project/team — the last N most recent, or filtered by timeframe — without reimplementing MS's iteration surface,
+So that compound skills like `/azdo-sprint-report` can reference iterations deterministically and cheaply.
 
-**Acceptance Criteria:**
+**Acceptance Criteria (as shipped):**
 
-**Given** `src/tools/iterations.ts` exports `registerIterationTools(server)` and `listTeamIterations(api, params)`
-**When** the server responds to `tools/list`
-**Then** a tool `list_team_iterations` is present with input schema `{ project?: string, team?: string, timeframe?: "current" | "past" | "future" }`
+**Given** `src/tools/iterations.ts` exports `registerIterationTools(server)`
+**When** `src/index.ts` calls it during startup
+**Then** a tool `list_recent_iterations` is registered with input schema `{ project: string, team: string, limit?: number (positive int, default 2) }`
+**And** Microsoft's `configureWorkTools(server, tokenProvider, clientProvider, userAgentProvider)` is invoked in the same registration, exposing the MS `work_*` surface under the unified namespace
 
-**Given** `list_team_iterations` is called without `project` or `team` parameters
+**Given** `list_recent_iterations` is called with valid `project` and `team`
 **When** the handler executes
-**Then** `config.defaultProject` and `config.defaultTeam` are used as fallbacks
+**Then** the response contains up to `limit` most-recent iterations (default 2), filtered to entries with a populated `attributes.startDate`, sorted by that date descending, serialised as a pretty-printed JSON `text` content block
 
-**Given** `list_team_iterations` is called with `timeframe: "current"`
+**Given** `work_list_team_iterations` is called with `timeframe: "current"` (MS-inherited tool)
 **When** the handler executes
-**Then** the response contains only iterations whose dates span today's date
+**Then** the response contains only iterations whose dates span today's date — this covers the original "current iteration" scenario without an author-owned wrapper
 
-**Given** `list_team_iterations` is called with no `timeframe`
-**When** the handler executes
-**Then** the response contains all iterations visible to the team context
+**Given** the underlying AzDO REST call throws
+**When** the handler catches the error
+**Then** the response is `{ content: [{ type: 'text', text: 'Error: <message>' }], isError: true }`
 
-**Given** each returned iteration object
-**When** the response JSON is inspected
-**Then** at minimum `id` (GUID), `name`, `path`, and date range fields are present
+**FR coverage note:** FR12 (list iterations) — covered by `list_recent_iterations` (last N) + MS `work_list_team_iterations` (full enumeration with timeframe). FR13 (timeframe filter) — covered by the MS `timeframe` param. FR14 (iteration name→GUID) — Claude-orchestrated at the skill layer; no tool change required.
 
 ### Stories 2.4 and 2.5 — merged into Story 2.1
 
