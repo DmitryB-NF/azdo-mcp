@@ -106,11 +106,11 @@ _From Architecture document:_
 - **Runtime: `node --env-file=.env --import tsx src/index.ts`.** No `tsc` build step; no `dist/`. `tsx` registered via Node's `--import` flag. Alternative dev command adds `--watch`.
 - **Configuration: `.env` + native `--env-file`.** No `dotenv` package dependency.
 - **`.claude/.mcp.json` committed, ready-to-run.** Contains `node` command + `--env-file` + `--import tsx` + `src/index.ts`, `cwd: "./"`, `type: "stdio"`. No secrets.
-- **Module boundaries:** `process.env` only in `src/config.ts`; `new WebApi(...)` only in `src/client.ts`; deep-imports from `@azure-devops/mcp/dist/*` only in `src/index.ts`. Enforced by convention; violations caught during Inspector testing.
+- **Module boundaries:** `process.env` only in `src/config.ts`; `new WebApi(...)` only in `src/client.ts`; deep-imports from `@azure-devops/mcp/dist/*` only inside the matching `src/tools/*.ts` wrapper. Enforced by convention; violations caught during Inspector testing.
 - **Tool module shape:** each `src/tools/*.ts` exports `register<Domain>Tools(server)` on top, followed by public operations, then private helpers. Pure operations accept `api: WebApi` explicitly; registration functions are the only callers of `getClient()`.
-- **Three callable providers** for MS deep-import: `tokenProvider`, `clientProvider`, `userAgentProvider` exported from `src/client.ts`. Positional handoff to MS `configure*Tools(server, ...)`.
-- **Canonical `tsconfig.json`:** `target: ESNext`, `module: ESNext`, `moduleResolution: bundler`, `allowImportingTsExtensions: true`, `strict: true`, `noEmit: true`, `esModuleInterop: true`, `skipLibCheck: true`, `rootDir: src`, `types: [node]`, `include: [src/**/*.ts]`.
-- **Startup error handling:** `src/config.ts` throws on missing env; top-level `try/catch` in `src/index.ts` writes the single permitted `process.stderr.write` call with a tagged prefix and exits 1.
+- **Three callable providers** for MS deep-import: `tokenProvider`, `clientProvider`, `userAgentProvider` — module-private inside the matching `src/tools/<domain>.ts` wrapper, positionally handed to MS's `configure*Tools(server, ...)`.
+- **Canonical `tsconfig.json`:** `target: ESNext`, `module: ESNext`, `moduleResolution: bundler`, `allowImportingTsExtensions: true`, `strict: true`, `noEmit: true`, `esModuleInterop: true`, `skipLibCheck: true`, `rootDir: src`, `types: [node]`, `include: [src/**/*.ts, types/**/*.d.ts]`.
+- **Startup error handling:** `src/config.ts` throws on missing env at module-load time. MVP accepts Node's default uncaught-exception output on stderr (the first line is `Error: <KEY> is required` — the actionable signal). A tagged single-line stderr formatter via `process.on('uncaughtException')` preload is deferred — see `specs/dev/deferred-work.md`.
 - **Logging discipline:** no `console.*` in runtime code. Temporary debug logging via `console.error` permitted during active development; must be removed before commit.
 - **Response serialization:** JSON-stringified (2-space indent) into a single MCP `text` content block.
 - **Zod schemas inline** in each `registerTool` call; no separate `schemas.ts`.
@@ -257,57 +257,27 @@ So that every other module can consume configuration with compile-time type safe
 **When** a `grep` for `process.env` is run across `src/**`
 **Then** only `src/config.ts` matches
 
-### Story 1.3: Azure DevOps Client Module
+### Story 1.3: Running MCP server with Microsoft work-items tools
 
-As a developer,
-I want `src/client.ts` to own a lazy-initialized `WebApi` singleton and expose three callable providers for Microsoft deep-import handoff,
-So that authentication is constructed exactly once per process and all AzDO access flows through a single module boundary.
-
-**Acceptance Criteria:**
-
-**Given** `src/client.ts` is imported and `getClient()` is called for the first time
-**When** execution reaches the `WebApi` constructor
-**Then** `getPersonalAccessTokenHandler(config.pat)` is called with the PAT from `config.ts`
-**And** a `WebApi` instance is created against `config.orgUrl`
-**And** the instance is cached in a module-scoped variable
-
-**Given** `getClient()` has already been called at least once
-**When** `getClient()` is called again
-**Then** the same cached `WebApi` instance is returned without re-instantiating
-
-**Given** `src/client.ts` is loaded
-**When** the module exports are inspected
-**Then** exactly four symbols are exported: `getClient`, `tokenProvider`, `clientProvider`, `userAgentProvider`
-**And** `tokenProvider` returns `Promise<string>` yielding `config.pat`
-**And** `clientProvider` returns `Promise<WebApi>` by awaiting `getClient()`
-**And** `userAgentProvider` returns a string containing the package name and version
-
-**Given** `src/client.ts` is the only source of `new WebApi(...)` calls in the codebase
-**When** a `grep` for `new WebApi` is run across `src/**`
-**Then** only `src/client.ts` matches
-
-### Story 1.4: Server Entry Point with Microsoft Work-Items Deep-Import
-
-As a developer,
-I want `src/index.ts` to construct an `McpServer`, wire Microsoft's work-items tools via deep-import, connect stdio transport, and handle startup failures cleanly,
-So that running `pnpm start` produces a live MCP server responding to Claude Code's JSON-RPC requests.
+As a Claude Code user,
+I want `pnpm start` to boot a live MCP server that exposes Microsoft's `wit_*` work-item tools against my Azure DevOps organisation,
+So that Claude can fetch, query, and comment on real work items through MS-provided tooling before any author-owned primitives exist — the MVP is usable from this story onward.
 
 **Acceptance Criteria:**
 
-**Given** environment variables are valid and the server is started via `pnpm start`
+**Given** `pnpm start` is invoked with a valid `.env`
 **When** the process boots
-**Then** an `McpServer` instance is constructed with name `azdo-mcp` and a semver version string
-**And** `configureWorkItemTools(server, tokenProvider, clientProvider, userAgentProvider)` is called exactly once with the providers from `src/client.ts`
+**Then** `src/index.ts` constructs an `McpServer` with name `azdo-mcp` and a semver version string
+**And** `src/tools/work-items.ts` exports `registerWorkItemTools(server)` which calls Microsoft's `configureWorkItemTools(server, tokenProvider, clientProvider, userAgentProvider)` exactly once with module-private provider helpers
+**And** `src/client.ts` exposes a single public `getClient(): WebApi` backed by a lazy singleton (all auth plumbing — PAT handler, `new WebApi(...)` — is private to `client.ts`)
 **And** `server.connect(new StdioServerTransport())` is called
 **And** the process stays alive listening on stdio
-**And** `console.log` is never called anywhere in runtime code
 
 **Given** any required environment variable is missing
 **When** the process boots
-**Then** startup fails with a single `process.stderr.write` call prefixed `[azdo-mcp] Startup failure:` containing the missing-variable message
-**And** `process.exit(1)` is called
+**Then** the process exits with a non-zero code and the missing-variable message is visible on stderr (exact format is Node's default uncaught-error output — see Startup-error note below)
 
-**Given** the server is running and a Claude Code host (or MCP Inspector) has connected
+**Given** the server is running and MCP Inspector has connected
 **When** the host issues a `tools/list` JSON-RPC request
 **Then** the response includes Microsoft's `wit_*` tools (at minimum `wit_get_work_item`, `wit_query_by_wiql`, `wit_add_work_item_comment`)
 **And** no author-written tools are in the list (they arrive in Epic 2 and Epic 3)
@@ -315,11 +285,20 @@ So that running `pnpm start` produces a live MCP server responding to Claude Cod
 **Given** the server is running
 **When** `wit_get_work_item` is invoked via MCP Inspector with a valid work-item ID
 **Then** the tool returns a content block containing the work item fields fetched from Azure DevOps
-**And** stdout contains only well-formed JSON-RPC messages
+**And** stdout contains only well-formed JSON-RPC messages (no leaks)
 
-**Given** `@azure-devops/mcp/dist/*` imports
-**When** a `grep` for `@azure-devops/mcp/dist` is run across `src/**`
-**Then** only `src/index.ts` matches
+**Module boundaries:**
+- **Given** `new WebApi(...)` and `getPersonalAccessTokenHandler(...)` calls, **Then** only `src/client.ts` matches a codebase-wide grep
+- **Given** `@azure-devops/mcp/dist/*` deep-imports, **Then** only `src/tools/work-items.ts` matches a codebase-wide grep
+- **Given** runtime code, **Then** `console.log` is never called (temporary `console.error` permitted during development and removed before commit)
+- **Given** `src/client.ts` exports, **Then** only `getClient` is public — provider helpers (`tokenProvider`, `clientProvider`, `userAgentProvider`) live as private functions inside `src/tools/work-items.ts` where they are the only callers
+
+**Provider shapes (private inside `src/tools/work-items.ts`, consumed by `configureWorkItemTools`):**
+- `tokenProvider(): Promise<string>` — resolves to `config.pat`
+- `clientProvider(): Promise<WebApi>` — resolves to `getClient()`
+- `userAgentProvider(): string` — `<package-name>/<package-version>` read from `package.json`
+
+**Startup-error note:** the MVP accepts Node's default uncaught-exception output (the stack trace starts with the `Error: <KEY> is required` line, which contains the actionable signal). Formatted single-line stderr (the original NFR-M4 phrasing) would require either a Node `--import` preload registering `process.on('uncaughtException', …)` or moving config validation behind an explicit `loadConfig()` call. Both are post-MVP hardening — see `specs/dev/deferred-work.md`.
 
 ## Epic 2: Work Item Retrieval — Curated Read Layer
 

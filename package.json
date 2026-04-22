@@ -9,10 +9,10 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "install:bmad": "npx bmad-method@6.3.0 install",
     "start": "node --env-file=.env --import tsx src/index.ts",
+    "inspect": "mcp-inspector node --env-file=.env --import tsx src/index.ts",
     "type-check": "tsc --noEmit",
-    "inspect": "npx @modelcontextprotocol/inspector node --env-file=.env --import tsx src/index.ts"
+    "install:bmad": "npx bmad-method@6.3.0 install"
   },
   "dependencies": {
     "@azure-devops/mcp": "2.6.0",
@@ -22,6 +22,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@modelcontextprotocol/inspector": "^0.21.2",
     "@types/node": "^25.6.0",
     "typescript": "^6.0.3"
   },

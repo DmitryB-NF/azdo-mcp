@@ -7,5 +7,5 @@ export default {
 
 function requireEnv(key: string): string {
   if (!process.env[key]) throw new Error(`${key} is required`);
-  return process.env[key]!;
+  return process.env[key];
 }

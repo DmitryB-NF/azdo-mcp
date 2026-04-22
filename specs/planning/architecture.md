@@ -584,7 +584,7 @@ azdo-mcp/
 
 **Boundary enforcement:**
 
-- Imports from `@azure-devops/mcp/dist/tools/*` are permitted **only** in `src/index.ts` via the four `configure*Tools(server, ...)` calls. No other file reaches into `dist/`.
+- Imports from `@azure-devops/mcp/dist/tools/*` are permitted **only** inside the matching `src/tools/*.ts` wrapper that exports the `register<Domain>Tools(server)` function (e.g. `configureWorkItemTools` lives in `src/tools/work-items.ts`). No other file reaches into `dist/`.
 - Imports from `azure-devops-node-api` are permitted **only** in `src/client.ts` and `src/tools/*.ts`. No direct REST calls elsewhere.
 - `process.env` access is permitted **only** in `src/config.ts`.
 
@@ -598,14 +598,14 @@ azdo-mcp/
 | Iteration Management | FR12–FR14 | `src/tools/iterations.ts` (`list_team_iterations`) |
 | Skill Orchestration | FR15–FR20 | `.claude/skills/azdo-*/SKILL.md` (five markdown files) |
 | Configuration and Identity | FR21–FR24 | `src/config.ts`, `src/client.ts`, `.env`, `.claude/.mcp.json` |
-| Ecosystem Integration (MS deep-import) | FR25–FR28 | `src/index.ts` (calls MS `configure*Tools`), inherits via pnpm dep |
+| Ecosystem Integration (MS deep-import) | FR25–FR28 | `src/tools/<domain>.ts` wrappers (each calls its MS `configure*Tools` and re-exports as `register<Domain>Tools(server)`), inherits via pnpm dep |
 | Protocol Compliance / Errors | FR29–FR32 | `src/index.ts` (stdio transport), per-tool `try/catch` in every `register*Tools` handler |
 
 **Cross-cutting concerns mapping:**
 
-- **Authentication propagation** → `src/client.ts` (singleton PAT handler + three providers).
+- **Authentication propagation** → `src/client.ts` (singleton PAT handler behind `getClient()`); three MS-provider callbacks (`tokenProvider`, `clientProvider`, `userAgentProvider`) are private to each `src/tools/<domain>.ts` wrapper.
 - **stdio-stdout invariant** → enforced by convention across `src/**`; no runtime `console.*` calls.
-- **Deep-import fragility** → isolated to `src/index.ts` via the four `configure*Tools` call sites; fallback plan lives in `src/tools/*.ts` (reimplement directly on `azure-devops-node-api` if needed).
+- **Deep-import fragility** → isolated to each `src/tools/<domain>.ts` via the matching `configure*Tools` call; fallback plan reimplements directly on `azure-devops-node-api` inside the same file if MS deep-import breaks.
 - **Error pass-through** → isolated to `register*Tools` handlers in each tool file; pure operations throw.
 - **Skill-authoring boundary** → `.claude/skills/` is the runtime extensibility surface; `src/tools/` is the code extensibility surface.
 
@@ -668,9 +668,8 @@ pnpm run inspect     # = pnpm exec @modelcontextprotocol/inspector tsx src/index
 ```json
 "scripts": {
   "start":        "node --env-file=.env --import tsx src/index.ts",
-  "dev":          "node --env-file=.env --import tsx --watch src/index.ts",
   "type-check":   "tsc --noEmit",
-  "inspect":      "npx @modelcontextprotocol/inspector node --env-file=.env --import tsx src/index.ts",
+  "inspect":      "mcp-inspector node --env-file=.env --import tsx src/index.ts",
   "install:bmad": "npx bmad-method@6.3.0 install"
 }
 ```
@@ -745,10 +744,12 @@ All identified conflict points (naming, imports, file shape, error handling, log
 
 ### Resolution of Important Gaps
 
-**Startup error handling pattern:**
+**Startup error handling pattern (aspirational — deferred at MVP):**
+
+The clean implementation would be:
 
 ```ts
-// src/index.ts
+// src/index.ts (aspirational)
 try {
   const { config } = await import('./config');    // throws on missing env
   const { main } = await import('./main');        // wires server + registers tools + connects stdio
@@ -759,7 +760,7 @@ try {
 }
 ```
 
-The single permitted `process.stderr.write` call is at the fail-fast boundary only, not elsewhere. `main()` owns server boot + stdio connect; while stdio is open, the process stays alive. Alternatively, the boot logic can inline in `src/index.ts` without a separate `src/main.ts` — the shape is identical.
+Story 1.3 explicitly rejected this pattern: wrapping imports in dynamic `import()` to defer config evaluation into a `try/catch` block is the only way to make the `catch` reachable (static imports of `./config` throw at module-evaluation time, before any `try` runs), and the dynamic-import trick was called "мусор" in review. MVP accepts Node's default uncaught-exception output on stderr — the first line is `Error: <KEY> is required`, which carries the actionable signal; the rest is a developer-only stack trace. Revisit via a Node `--import` preload (`process.on('uncaughtException', …)`) or an explicit `loadConfig()` function if user-facing stderr formatting becomes a requirement. See `specs/dev/deferred-work.md`.
 
 **Canonical `tsconfig.json`:**
 
@@ -778,7 +779,7 @@ The single permitted `process.stderr.write` call is at the fail-fast boundary on
     "rootDir": "src",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "types/**/*.d.ts"]
 }
 ```
 
@@ -819,7 +820,7 @@ The single permitted `process.stderr.write` call is at the fail-fast boundary on
 
 - Follow every decision in `Core Architectural Decisions` verbatim.
 - Apply every pattern from `Implementation Patterns & Consistency Rules` uniformly across all tool modules.
-- Respect the boundary rules: `process.env` only in `config.ts`; `new WebApi(...)` only in `client.ts`; deep-imports from `@azure-devops/mcp/dist/*` only in `src/index.ts`.
+- Respect the boundary rules: `process.env` only in `config.ts`; `new WebApi(...)` only in `client.ts`; deep-imports from `@azure-devops/mcp/dist/*` only inside the matching `src/tools/*.ts` wrapper.
 - Use the canonical `tsconfig.json` and `.claude/.mcp.json` provided in this document.
 - No `console.*` in runtime code. No unit tests mandatory.
 - When in doubt, refer to this document before inventing a convention.
