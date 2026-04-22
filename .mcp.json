@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "azdo-mcp": {
+    "azdo": {
       "command": "node",
       "args": [
         "--env-file=.env",

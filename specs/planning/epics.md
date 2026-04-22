@@ -69,7 +69,7 @@ This document provides the complete epic and story breakdown for AzDo MCP, decom
 
 **Performance**
 - NFR-P1: MCP server cold start < 2 seconds on Node 24 LTS.
-- NFR-P2: Single tool-call latency < 1.5 seconds at p95 for `get_work_item` and `add_comment`.
+- NFR-P2: Single tool-call latency < 1.5 seconds at p95 for a one-ID work-item fetch (`wit_get_work_items_batch_by_ids` with a single ID) and `add_comment`.
 - NFR-P3: Batch fetch of up to 50 work items in an iteration completes within 5 seconds; chunk above 200-ID AzDO limit.
 - NFR-P4: `/azdo-sprint-report` end-to-end completion under 2 minutes for a 25-item iteration.
 
@@ -124,13 +124,13 @@ N/A — AzDo MCP has no UI. All user interaction is through Claude Code's chat i
 
 | FR | Epic | Описание покрытия |
 |---|---|---|
-| FR1 fetch single | Epic 2 | `get_work_item` primitive |
-| FR2 fields returned | Epic 2 | JSON response from `get_work_item` |
-| FR3 fetch multiple by IDs | Epic 2 | `list_work_items` with `ids` criterion |
-| FR4 fetch by iteration | Epic 2 | `list_work_items` with `iteration` criterion |
-| FR5 filter by priority | Epic 2 | `list_work_items` with `priority` criterion |
-| FR6 WIQL query | Epic 2 | `list_work_items` with `wiql` criterion |
-| FR7 field subset | Epic 2 | `fields` param |
+| FR1 fetch single | Epic 2 | MS `wit_get_work_items_batch_by_ids` called by `/azdo-fetch-tickets` skill (single-element `ids`) |
+| FR2 fields returned | Epic 2 | JSON response from `wit_get_work_items_batch_by_ids` |
+| FR3 fetch multiple by IDs | Epic 2 | `wit_get_work_items_batch_by_ids` via skill |
+| FR4 fetch by iteration | Epic 2 | Skill builds WIQL with `@CurrentIteration('[project]\team')` → `wit_query_by_wiql` → batch |
+| FR5 filter by priority | Epic 2 | Skill builds WIQL with `[Microsoft.VSTS.Common.Priority] = N` → `wit_query_by_wiql` → batch |
+| FR6 WIQL query | Epic 2 | `wit_query_by_wiql` via skill (user's raw SELECT accepted verbatim) |
+| FR7 field subset | Epic 2 | `fields` param on `wit_get_work_items_batch_by_ids` |
 | FR8 create work item | Epic 3 | `create_work_item` primitive |
 | FR9 create with links | Epic 3 | `links` param |
 | FR10 post comment | Epic 3 | `add_comment` primitive |
@@ -172,13 +172,15 @@ N/A — AzDo MCP has no UI. All user interaction is through Claude Code's chat i
 **FRs covered:** FR15, FR19, FR21, FR22, FR23, FR24, FR25 (work-items domain only), FR28, FR29, FR30, FR31, FR32
 **FRs deferred from Epic 1:** FR27 (wiki ETag; requires wiki primitive or `configureWikiTools` wiring, both Phase 2)
 
-### Epic 2: Work Item Retrieval — Curated Read Layer
+### Epic 2: Work Item Retrieval — Skill-Based Read Layer
 
-**Goal:** Introduce author-controlled read primitives (`get_work_item`, `list_work_items`, `list_team_iterations`) with clean, verb-leading naming and a unified `criteria` parameter object for batch queries. Two user-facing Claude Skills (`/azdo-fetch-ticket`, `/azdo-fetch-tickets`) give the user conversational access to the whole work-item retrieval surface. After this epic, the core pain ("20 browser tabs to read tickets") is solved.
+**Goal:** Solve the work-item retrieval pain entirely through a single Claude Skill (`/azdo-fetch-tickets`) composed over Microsoft's inherited `wit_*` tools. No author-owned read primitives are shipped — the WIQL-then-batch pattern is an AzDO-API reality, MS already covers both halves, and skill-layer composition (FR17) is the architecture's native extension point. The only author-owned tool added is `get_project_context`, a zero-arg lookup returning the configured AzDO project (and team) so the skill can build team-relative WIQL (e.g. `@CurrentIteration('[project]\team')`) without hardcoding.
 
-**User outcome:** *"I type `/azdo-fetch-tickets current sprint` and receive all iteration tickets in one structured response, ready for Claude to reason about."*
+Single-ticket, multi-ID, iteration-scoped, WIQL-raw, and shorthand-filter retrieval all share one user-facing entry point. Originally-planned stories 2.2 (`list_work_items`), 2.4 (`/azdo-fetch-ticket`), and 2.5 (`/azdo-fetch-tickets` batch-only) are collapsed into Story 2.1's unified skill. See `specs/planning/research/skill-vs-primitive-read-path-2026-04-22.md` for the full rationale behind abandoning author read primitives.
 
-**FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR12, FR13, FR14, FR16, FR17, FR18, FR20 (2 of 5 skills)
+**User outcome:** *"I type `/azdo-fetch-tickets current sprint` — or `1234`, or `closed P1 from last sprint` — and receive structured, readable output in one turn."*
+
+**FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR12, FR13, FR14, FR16, FR17, FR18, FR20 (2 of 5 skills — `/azdo-fetch-ticket` and `/azdo-fetch-tickets` merged into a single skill)
 
 ### Epic 3: Work Item Writes — Curated Mutation Layer
 
@@ -300,80 +302,84 @@ So that Claude can fetch, query, and comment on real work items through MS-provi
 
 **Startup-error note:** the MVP accepts Node's default uncaught-exception output (the stack trace starts with the `Error: <KEY> is required` line, which contains the actionable signal). Formatted single-line stderr (the original NFR-M4 phrasing) would require either a Node `--import` preload registering `process.on('uncaughtException', …)` or moving config validation behind an explicit `loadConfig()` call. Both are post-MVP hardening — see `specs/dev/deferred-work.md`.
 
-## Epic 2: Work Item Retrieval — Curated Read Layer
+## Epic 2: Work Item Retrieval — Skill-Based Read Layer
 
-Introduce author-controlled read primitives with clean naming and two user-facing Claude Skills that give the user conversational access to the whole work-item retrieval surface.
+Solve the work-item retrieval pain through a single Claude Skill (`/azdo-fetch-tickets`) composed over Microsoft's inherited `wit_*` tools, plus one support tool (`get_project_context`) returning the configured AzDO project and team for team-relative WIQL.
 
-### Story 2.1: `get_work_item` Primitive
+### Story 2.1: Skill-based read path with project context
 
-As Claude (via a skill or direct tool call),
-I want to fetch a single Azure DevOps work item by ID with an option to include linked-items,
-So that orchestrating skills can pull ticket context into the conversation with one tool call.
+**Replaces:** original Story 2.1 (`get_work_item`), original Story 2.2 (`list_work_items`), original Story 2.4 (`/azdo-fetch-ticket`), and original Story 2.5 (`/azdo-fetch-tickets` as a separate batch-only skill). All four collapsed into one story covering a unified `/azdo-fetch-tickets` skill plus the `get_project_context` support tool. Rationale in `specs/planning/research/skill-vs-primitive-read-path-2026-04-22.md`.
+
+As a Claude Code user,
+I want a single conversational entry point — `/azdo-fetch-tickets` — that fetches work items by any reasonable criterion (one or many IDs, current or named iteration, raw WIQL, or compound shorthand like "closed P1 last sprint") and renders the result as readable Markdown,
+So that every work-item read in Azure DevOps becomes a single chat turn without leaving Claude Code, without browser tabs, and without me memorising MS tool names.
 
 **Acceptance Criteria:**
 
-**Given** `src/tools/work-items.ts` is loaded and `registerWorkItemTools(server)` has been called
+**Given** `src/tools/project-context.ts` exports `registerProjectContextTools(server)`, imported and called by `src/index.ts`
 **When** the server responds to `tools/list`
-**Then** a tool named `get_work_item` is present with description, zod input schema, and a handler
-**And** the input schema declares `id: number.int.positive()` and `expandLinks: boolean.optional()`
+**Then** a tool `get_project_context` is present with an empty input schema and a zero-arg handler
+**And** `get_project_context` appears before any `wit_*` tool in the list (author layer registered first)
 
-**Given** `get_work_item` is called with a valid existing work-item ID
+**Given** `get_project_context` is called
 **When** the handler executes
-**Then** the response contains a single `text` content block with pretty-printed JSON (2-space indent)
-**And** the JSON includes `System.Title`, `System.Description`, `System.State`, `Microsoft.VSTS.Common.Priority` at minimum
+**Then** the response contains a single `text` content block with pretty-printed JSON `{ project, team }`
+**And** `project` is `config.defaultProject` or `null`; `team` is `config.defaultTeam` or `null`
 **And** `isError` is not set
 
-**Given** `get_work_item` is called with `expandLinks: true`
-**When** the response JSON is inspected
-**Then** a `relations` array is present containing typed links (if the work item has any)
+**Given** `.claude/skills/azdo-fetch-tickets/SKILL.md` exists
+**When** Claude Code starts
+**Then** `/azdo-fetch-tickets` is available as a slash-command with the documented description
 
-**Given** `get_work_item` is called with an ID that does not exist in Azure DevOps
-**When** the handler executes
-**Then** the response contains `isError: true`
-**And** the `text` field contains the raw error message prefixed `Error:`
+**Given** the user invokes `/azdo-fetch-tickets 1234` (one numeric ID)
+**When** Claude reads the skill
+**Then** Claude calls `wit_get_work_items_batch_by_ids({ ids: [1234] })` directly — no `wit_query_by_wiql`, no `get_project_context`
+**And** Claude renders a single-ticket Markdown summary (title, state, priority, assignee, description, relations if returned)
 
-**Given** the file shape convention
-**When** `src/tools/work-items.ts` is read top-to-bottom
-**Then** the `registerWorkItemTools` export appears before any pure operation function
-**And** the pure `getWorkItem(api, params)` function takes the client as its first parameter and never calls `getClient()` internally
+**Given** the user invokes `/azdo-fetch-tickets 1234 5678 9012` (multiple numeric IDs)
+**When** Claude reads the skill
+**Then** Claude calls `wit_get_work_items_batch_by_ids({ ids: [1234, 5678, 9012] })` directly
+**And** Claude renders a grouped Markdown summary (group by `System.State`, sort each group by `Microsoft.VSTS.Common.Priority`)
 
-### Story 2.2: `list_work_items` Primitive (batch fetch)
+**Given** the user invokes `/azdo-fetch-tickets current sprint`
+**When** Claude reads the skill
+**Then** Claude calls `get_project_context` once, captures `{ project, team }`
+**And** Claude builds WIQL `SELECT [System.Id] FROM WorkItems WHERE [System.IterationPath] = @CurrentIteration('[<project>]\<team>')`
+**And** Claude calls `wit_query_by_wiql({ query, project })`, extracts IDs, then calls `wit_get_work_items_batch_by_ids({ ids, project })`
 
-As Claude (via a skill or direct tool call),
-I want to fetch multiple Azure DevOps work items in one call using criteria (iteration / priority / WIQL / explicit IDs) with optional field selection,
-So that compound workflows can retrieve a whole iteration in one round-trip.
+**Given** the user invokes `/azdo-fetch-tickets closed P1 from last sprint`
+**When** Claude reads the skill
+**Then** Claude calls `get_project_context` once and composes one WIQL combining priority, closed-state clause, and `@CurrentIteration(...) - 1`, then runs query → batch
 
-**Acceptance Criteria:**
+**Given** the user invokes `/azdo-fetch-tickets` with a raw `SELECT …` query
+**When** Claude reads the skill
+**Then** Claude runs the user's WIQL verbatim through `wit_query_by_wiql`, then `wit_get_work_items_batch_by_ids`
 
-**Given** `list_work_items` is registered
-**When** the server responds to `tools/list`
-**Then** the tool is present with an input schema accepting `criteria: { iteration?, priority?, wiql?, ids? }` and `fields?: string[]`
+**Given** the user invokes `/azdo-fetch-tickets` with missing or ambiguous input
+**When** Claude reads the skill
+**Then** Claude asks a single clarifying question before calling any tool
 
-**Given** `list_work_items` is called with `criteria: { ids: [101, 102, 103] }`
-**When** the handler executes
-**Then** the response contains the requested work items as an array of JSON objects
+**Given** any MS tool returns `isError: true`
+**When** Claude processes the response
+**Then** Claude surfaces the raw error text verbatim and stops — no fabrication, no emulation, no REST fallback
 
-**Given** `list_work_items` is called with `criteria: { iteration: "<valid iteration GUID>" }`
-**When** the handler executes
-**Then** the response contains every work item assigned to that iteration (via two-step fetch: iteration→IDs, then batch)
+**Given** a query resolves to zero IDs at any step
+**When** Claude processes the empty result
+**Then** Claude replies "No matching work items." and stops
 
-**Given** `list_work_items` is called with `criteria: { wiql: "SELECT [System.Id] FROM WorkItems WHERE [System.State] = 'Active'" }`
-**When** the handler executes
-**Then** the response contains the work items matching the WIQL query
+**Given** `get_project_context` returns `null` for a field the current call actually needs
+**When** Claude reads the response
+**Then** Claude asks the user for just that field (project alone, or team alone) rather than inventing values
 
-**Given** `list_work_items` is called with more than 200 matching IDs
-**When** the handler executes
-**Then** the batch fetch chunks IDs into groups of ≤200 and the response contains the complete flattened result
-
-**Given** `list_work_items` is called with `fields: ["System.Title", "System.State"]`
-**When** the response JSON is inspected
-**Then** only the requested fields are present on each work item (plus standard ID field)
+**Given** the `mcp__azdo-mcp__*` prefixed tools are not in Claude's available tool list
+**When** the user invokes the skill
+**Then** the skill instructs Claude to tell the user the `azdo-mcp` MCP server is not connected and point them at `.claude/.mcp.json`, rather than attempt REST or any other backchannel
 
 ### Story 2.3: `list_team_iterations` Primitive
 
 As Claude (via a skill),
 I want to list iterations for a given project and team with optional timeframe filtering,
-So that skills can resolve a human reference ("current sprint") to a concrete iteration GUID usable by `list_work_items`.
+So that skills that need explicit iteration enumeration (e.g. "list the last three sprints") can reach it without depending on Claude's WIQL `@CurrentIteration` macro. The `/azdo-fetch-tickets` skill from Story 2.1 does not depend on this tool — it uses `@CurrentIteration('[project]\team')` in WIQL — so Story 2.3 is optional scope. Work on `src/tools/iterations.ts` is tracked on a parallel agent track.
 
 **Acceptance Criteria:**
 
@@ -397,64 +403,9 @@ So that skills can resolve a human reference ("current sprint") to a concrete it
 **When** the response JSON is inspected
 **Then** at minimum `id` (GUID), `name`, `path`, and date range fields are present
 
-### Story 2.4: `/azdo-fetch-ticket` Claude Skill
+### Stories 2.4 and 2.5 — merged into Story 2.1
 
-As a Claude Code user,
-I want to type `/azdo-fetch-ticket 1234` and receive the ticket's contents rendered for easy reading,
-So that I can pull ticket context into the conversation without leaving Claude Code.
-
-**Acceptance Criteria:**
-
-**Given** the file `.claude/skills/azdo-fetch-ticket/SKILL.md` exists
-**When** Claude Code starts a new session
-**Then** `/azdo-fetch-ticket` is available as a slash-command
-
-**Given** the SKILL.md front matter
-**When** it is parsed
-**Then** `name` is `azdo-fetch-ticket` and `description` is a one-line purpose for Claude intent-matching
-
-**Given** the user invokes `/azdo-fetch-ticket 1234`
-**When** Claude reads the SKILL.md steps
-**Then** Claude calls `get_work_item({ id: 1234, expandLinks: true })`
-**And** Claude presents the returned fields as a concise, readable summary (title, state, priority, description, linked items)
-
-**Given** the user invokes `/azdo-fetch-ticket` without an ID
-**When** Claude reads the SKILL.md
-**Then** Claude asks the user for the ticket ID before calling any tool
-
-**Given** `get_work_item` returns `isError: true`
-**When** Claude reads the response
-**Then** Claude surfaces the error text to the user with a brief human-readable explanation
-
-### Story 2.5: `/azdo-fetch-tickets` Claude Skill
-
-As a Claude Code user,
-I want to type `/azdo-fetch-tickets` with criteria like "current sprint" or "priority 1" and receive all matching tickets in one response,
-So that I can pull batches of ticket context into the conversation in a single turn.
-
-**Acceptance Criteria:**
-
-**Given** `.claude/skills/azdo-fetch-tickets/SKILL.md` exists
-**When** Claude Code starts
-**Then** `/azdo-fetch-tickets` is available as a slash-command
-
-**Given** the user invokes `/azdo-fetch-tickets current sprint`
-**When** Claude reads the SKILL.md steps
-**Then** Claude calls `list_team_iterations({ timeframe: "current" })`, picks the GUID, then calls `list_work_items({ criteria: { iteration: <GUID> } })`
-**And** Claude returns the tickets grouped by state and sorted by priority in a Markdown list
-
-**Given** the user invokes `/azdo-fetch-tickets priority 1`
-**When** Claude reads the SKILL.md steps
-**Then** Claude calls `list_work_items({ criteria: { priority: 1 } })`
-**And** Claude returns the matching tickets in a readable Markdown list
-
-**Given** the user invokes `/azdo-fetch-tickets` with ambiguous or missing criteria
-**When** Claude reads the SKILL.md
-**Then** Claude asks the user to clarify (iteration, priority, WIQL, or explicit IDs) before calling any tool
-
-**Given** the response set is empty
-**When** Claude processes the empty array
-**Then** Claude replies with an explicit "no matching work items" message rather than fabricating results
+Originally planned as separate `/azdo-fetch-ticket` (single) and `/azdo-fetch-tickets` (batch) skills. Both folded into a single unified `/azdo-fetch-tickets` skill under Story 2.1. Single-ticket retrieval is `wit_get_work_items_batch_by_ids({ ids: [N] })` — the same call the batch path uses. Two skills for one concept invited duplicate SKILL.md maintenance and ambiguous intent-matching. Merge preserves all FR coverage (FR16–FR18, FR20 — 2-of-5 skills, since `/azdo-fetch-ticket` no longer exists standalone; the unified skill still counts once).
 
 ## Epic 3: Work Item Writes — Curated Mutation Layer
 
@@ -536,7 +487,7 @@ So that ticket composition becomes a single conversational turn rather than a br
 
 **Given** the user invokes `/azdo-create-ticket pull feature 8812 and propose a follow-up`
 **When** Claude reads the SKILL.md steps
-**Then** Claude calls `get_work_item({ id: 8812, expandLinks: true })` to pull context
+**Then** Claude calls `wit_get_work_items_batch_by_ids({ ids: [8812], expand: "relations" })` to pull context
 **And** Claude drafts a title and Markdown description for the follow-up
 **And** Claude presents the draft inline and asks for confirmation before calling `create_work_item`
 **And** on user approval, Claude calls `create_work_item({ project, type, title, description, links: [{ id: 8812, type: "System.LinkTypes.Related" }] })`
@@ -598,8 +549,8 @@ So that the weekly thirty-minute reporting chore becomes a ninety-second convers
 **Given** the user invokes `/azdo-sprint-report`
 **When** Claude reads the SKILL.md orchestration steps
 **Then** the steps instruct Claude to:
-- call `list_team_iterations({ timeframe: "current" })` and take the resolved iteration GUID
-- call `list_work_items({ criteria: { iteration: <GUID> }, fields: ["System.Title", "System.State", "System.Description", "Microsoft.VSTS.Common.Priority"] })`
+- call `get_project_context` and build WIQL `SELECT [System.Id] FROM WorkItems WHERE [System.IterationPath] = @CurrentIteration('[<project>]\<team>')`
+- call `wit_query_by_wiql({ query, project })`, extract IDs, then call `wit_get_work_items_batch_by_ids({ ids, project, fields: ["System.Title", "System.State", "System.Description", "Microsoft.VSTS.Common.Priority"] })`
 - group returned items by `System.State` (Done / In Progress / other), sort each group by `Microsoft.VSTS.Common.Priority` ascending
 - render a Markdown report with a heading per state and one bullet per item (title + priority + one-line trimmed description)
 - prompt the user to confirm the report and provide a target work-item ID for publishing
@@ -613,7 +564,7 @@ So that the weekly thirty-minute reporting chore becomes a ninety-second convers
 **When** Claude executes the skill
 **Then** Claude reports "no work items in this iteration" and does not call `add_comment`
 
-**Given** `list_work_items` or `add_comment` returns `isError: true`
+**Given** `wit_query_by_wiql`, `wit_get_work_items_batch_by_ids`, or `add_comment` returns `isError: true`
 **When** Claude processes the response
 **Then** Claude surfaces the error and does not claim the report was posted
 
