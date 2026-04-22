@@ -9,3 +9,15 @@ declare module '@azure-devops/mcp/dist/tools/work-items' {
     userAgentProvider: () => string,
   ): void;
 }
+
+declare module '@azure-devops/mcp/dist/tools/work' {
+  import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+  import type { WebApi } from 'azure-devops-node-api';
+
+  export function configureWorkTools(
+    server: McpServer,
+    tokenProvider: () => Promise<string>,
+    connectionProvider: () => Promise<WebApi>,
+    userAgentProvider: () => string,
+  ): void;
+}
