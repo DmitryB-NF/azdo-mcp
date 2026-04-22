@@ -121,7 +121,8 @@ touch src/index.ts src/config.ts src/client.ts
 touch src/tools/work-items.ts src/tools/iterations.ts src/tools/comments.ts
 touch README.md
 
-# Seed .env with required placeholders (never committed; .gitignore covers it)
+# Seed .env with required placeholders — committed at initial scaffold for
+# variable discoverability; re-added to .gitignore before any real-secret commit.
 cat > .env <<'EOF'
 AZDO_ORG_URL=https://dev.azure.com/<your-org>
 AZDO_PAT=<your-personal-access-token>
@@ -200,7 +201,7 @@ Tool registration pattern, provider pattern for deep-import, input validation, e
 | Decision | Choice | Rationale |
 |---|---|---|
 | Auth method | **Personal Access Token** via `azure-devops-node-api`'s `getPersonalAccessTokenHandler(PAT)` | Emits `Authorization: Basic base64("PAT:"+token)`; user already has working PAT. |
-| Secret storage | **`.env` file** with real values, loaded by Node's native `--env-file=.env` flag at process start; **gitignored from the first commit**. No separate `.env.example`; no `dotenv` package. | Simpler for a local personal tool. Node 20.6+ reads `.env` natively, eliminating a runtime dependency. The README documents the required field names. |
+| Secret storage | **`.env` file** loaded by Node's native `--env-file=.env` flag at process start. Committed with **placeholder values** at the initial scaffold so the required-variable list is self-documenting; re-added to `.gitignore` (and removed from the index) before any commit that would contain real secrets. No separate `.env.example`; no `dotenv` package. | Simpler for a local personal tool. Node 20.6+ reads `.env` natively. Tracked placeholder `.env` replaces `.env.example` as the single source of truth for required-field names. |
 | PAT scopes required | Work Items (R&W), Wiki (R&W), Project & Team (R) | Documented in README; enables least-privilege PAT generation. |
 | Secret rotation | **Manual** — user regenerates PAT, updates `.env`, restarts Claude Code | Acceptable for personal tool; automated rotation is Phase 2. |
 | Encryption at rest | **N/A** | No data store. `.env` inherits filesystem permissions (user's responsibility). |
@@ -537,7 +538,7 @@ azdo-mcp/
 | `package.json` | ESM marker (`"type": "module"`), runtime + dev deps, scripts `start` / `dev` / `type-check` / `inspect` (all node-based, no pnpm wrappers at runtime), plus `install:bmad` pinning the BMad Method installer version for planning provenance |
 | `pnpm-lock.yaml` | Transitive resolution lock; committed |
 | `tsconfig.json` | `target: ESNext`, `module: ESNext`, `moduleResolution: bundler`, `strict: true`, `noEmit: true`, `allowImportingTsExtensions: true` |
-| `.env` | Real config values; gitignored from the first commit |
+| `.env` | Placeholder values at initial scaffold (committed for discoverability); real values populated locally, file re-added to `.gitignore` before any real-secret commit |
 | `.gitignore` | `.env`, `node_modules/` |
 | `README.md` | Prerequisites (Node 24 LTS, Claude Code, AzDO PAT), five-minute setup, tool/skill catalog, PAT scope table, troubleshooting |
 | `.claude/.mcp.json` | Ready-to-run MCP host entry using relative paths; picked up by Claude Code when the project is opened |

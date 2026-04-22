@@ -445,10 +445,10 @@ NFRs are scoped tightly. Categories that don't apply to a personal, single-user,
 
 ### Security
 
-- **NFR-S1: PAT storage.** Personal Access Token must be loaded exclusively from `.env` via Node's native `--env-file` flag (no `dotenv` package). `.env` must be listed in `.gitignore` from the first commit. No separate `.env.example` template — the README documents required field names. Simpler for a local personal tool.
+- **NFR-S1: PAT storage.** Personal Access Token must be loaded exclusively from `.env` via Node's native `--env-file` flag (no `dotenv` package). `.env` with **placeholder** values is committed at the initial scaffold so the required-variable list is self-documenting in the repo; real values are populated locally by each developer, and `.env` is re-added to `.gitignore` after the initial commit to keep real secrets out of history. No separate `.env.example` template — the initial tracked `.env` placeholder file serves that purpose.
 - **NFR-S2: No secret propagation.** No secret material (PAT, tokens, credentials) may appear in `.mcp.json` host config, README examples, repository commits, or MCP tool input/output schemas.
 - **NFR-S3: Minimum scope PAT.** The README must document the exact minimum-required PAT scopes (Work Items Read & Write, Wiki Read & Write, Project & Team Read). Users must be able to generate a least-privileged PAT and have the MVP work end-to-end without expanded scopes.
-- **NFR-S4: Public repo hygiene.** `.env` entry must be added to `.gitignore` before any commit containing secret material. Minimum acceptable: explicit `.env` line in `.gitignore`; no committed `.env*` file of any kind. No pre-commit hook required for MVP.
+- **NFR-S4: Public repo hygiene.** The initial scaffold commit may contain a `.env` with placeholder values only. Before the first commit that would contain real secret material, `.env` must be added to `.gitignore` and `git rm --cached .env` run. No pre-commit hook required for MVP — author discipline enforces this.
 - **NFR-S5: No telemetry.** The MCP server must not emit network requests beyond those required to serve tool calls to Azure DevOps. No analytics, no phone-home, no usage reporting.
 
 ### Integration

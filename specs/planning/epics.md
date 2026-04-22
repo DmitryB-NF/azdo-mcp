@@ -74,10 +74,10 @@ This document provides the complete epic and story breakdown for AzDo MCP, decom
 - NFR-P4: `/azdo-sprint-report` end-to-end completion under 2 minutes for a 25-item iteration.
 
 **Security**
-- NFR-S1: PAT loaded exclusively from `.env` via Node's `--env-file`; `.env` gitignored from first commit; no `.env.example`.
+- NFR-S1: PAT loaded exclusively from `.env` via Node's `--env-file`. `.env` with placeholder values committed at the initial scaffold for variable discoverability; real values populated locally. `.env` is re-added to `.gitignore` after the scaffold commit to keep real secrets out of history. No `.env.example` — the tracked placeholder `.env` serves that role.
 - NFR-S2: No secret material in `.mcp.json`, README, repository commits, or tool I/O schemas.
 - NFR-S3: README documents the exact minimum PAT scopes (Work Items R&W, Wiki R&W, Project & Team R).
-- NFR-S4: `.env` entry in `.gitignore` before any commit; no pre-commit hook required for MVP.
+- NFR-S4: `.env` must be in `.gitignore` (and removed from the index via `git rm --cached .env`) before any commit that would contain real secret material. The initial scaffold commit may include `.env` with placeholders. No pre-commit hook required for MVP.
 - NFR-S5: No network requests beyond Azure DevOps API. No telemetry.
 
 **Integration**
