@@ -1,0 +1,8 @@
+packages:
+  - '.'
+
+minimumReleaseAge: 1440 # 1 day — protect against supply chain attacks
+
+allowBuilds:
+  '@azure-devops/mcp': true
+  esbuild: true

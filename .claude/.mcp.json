@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "azdo-mcp": {
+      "command": "node",
+      "args": [
+        "--env-file=.env",
+        "--import",
+        "tsx",
+        "src/index.ts"
+      ],
+      "cwd": "./",
+      "type": "stdio"
+    }
+  }
+}
