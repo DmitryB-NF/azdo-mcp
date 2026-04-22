@@ -35,7 +35,7 @@ workflowType: 'prd'
 
 **AzDo MCP** is a personal MCP (Model Context Protocol) server that makes Azure DevOps operable from within Claude Code. It pairs a minimal set of server-side primitives — fetch work items, batch-fetch by criteria, post comments, create tickets — with a library of Claude Skills that orchestrate real workflows without compiled code. The product is for any Claude Code user who works in Azure DevOps (developer, PM, QA, designer — not developer-specific), and it targets a single behavioral outcome: **eliminate the browser tab for AzDO plumbing work**.
 
-The architectural bet is deliberate: **Skills are the UI. MCP is the bus.** Primitives stay minimal and thin; business logic lives in markdown-edited `SKILL.md` files that any user can author, edit, and share without a rebuild cycle. Microsoft's `@azure-devops/mcp@2.6.0` is deep-imported for ecosystem-wide AzDO capabilities (inheriting their raw-REST workarounds for Markdown comments and wiki ETag handling), while compound workflows — which Microsoft explicitly refuses to ship upstream — live in the Skills layer under the project's control. The result: one MCP server, one PAT-based auth stack, five primitives, five skills, five hours to MVP.
+The architectural bet is deliberate: **Skills are the UI. MCP is the bus.** The author layer stays minimal and thin; business logic lives in markdown-edited `SKILL.md` files that any user can author, edit, and share without a rebuild cycle. Microsoft's `@azure-devops/mcp@2.6.0` is bulk-wired for ecosystem-wide AzDO coverage (inheriting MS's registered tools including their native Markdown-comment handling), while compound workflows — which Microsoft explicitly refuses to ship upstream — live in the Skills layer under the project's control. During the build, applying this skill-over-primitive reasoning to both the read and write paths shrank the author surface from five primitives to two (`get_project_context`, `list_recent_iterations`); the rest composes MS-inherited tools at the skill layer. See `specs/planning/research/skill-vs-primitive-read-path-2026-04-22.md` and `specs/planning/research/skill-vs-primitive-write-path-2026-04-22.md`. The result: one MCP server, one PAT-based auth stack, a minimal author layer plus MS-inherited tool surface, five hours to MVP.
 
 The timing is not accidental. MCP adoption went vertical in Q1 2026 (97M monthly SDK downloads, up from 2M at launch in late 2024), Claude Code became the #1 AI coding tool in eight months, and Azure DevOps users remain structurally excluded from the agentic workflows that GitHub and Linear users take for granted. Microsoft's own Copilot for Azure Boards does not support work-item dependencies or concurrent operations. The gap is real, the tooling is mature, and the cost of filling it for personal use is measured in hours — not quarters.
 
@@ -84,11 +84,11 @@ Substituted for business success (non-commercial personal tool):
 
 ### Technical Success
 
-- **All 5 MCP primitives return structurally correct data** for the happy path (valid PAT, existing ticket, existing iteration).
+- **Both MCP author primitives (`get_project_context`, `list_recent_iterations`) return structurally correct data** for the happy path (valid PAT, existing project/team), and the MS-inherited `wit_*` / `work_*` tools return correct data on their happy paths too (verified via MCP Inspector per primitive introduction).
 - **stdio transport is clean:** zero `console.log` regressions, JSON-RPC protocol never corrupted.
-- **Markdown-comment workaround** (api-version 7.2-preview.4) operates via MS deep-import without author-written REST code.
-- **Wiki ETag retry** operates via MS deep-import without author-written REST code.
-- **Claude Code picks up all 5 skills** via `.claude/skills/*/SKILL.md` convention on fresh session start.
+- **Markdown-comment handling** works end-to-end through MS's registered `wit_add_work_item_comment` tool (its `format: "Markdown"` default obsoletes the originally planned author raw-REST workaround).
+- **Wiki ETag retry** is deferred to Phase 2 along with the rest of wiki tooling (FR27); no MVP success criterion depends on it.
+- **Claude Code picks up all shipped skills** via `.claude/skills/*/SKILL.md` convention on fresh session start.
 - **`.env` gitignored from the first commit** so no secret material can be committed accidentally.
 
 ### Measurable Outcomes
@@ -120,25 +120,31 @@ Not a platform MVP (no ecosystem ambition in MVP), not a revenue MVP (non-commer
 
 ### MVP — Minimum Viable Product (5-hour hard cap)
 
-**MCP primitives (5):**
+**MCP author primitives (2 at MVP, after Epic 2 + Epic 3 pivots):**
 
-- `get_work_item` — fetch by ID, return title/description/priority/state/comments/links
-- `list_work_items` — batch fetch by iteration / priority / WIQL / explicit ID list
-- `create_work_item` — create with full field control
-- `add_comment` — post Markdown-formatted comment on a work item
-- `list_recent_iterations` — last N iterations by start date (MS `work_list_team_iterations` bulk-wired for timeframe enumeration)
+- `get_project_context` — zero-arg tool returning `{ project, team, orgUrl }` from `.env`, so skills can build team-relative WIQL (`@CurrentIteration('[project]\team')`) and construct work-item URLs deterministically. Extended with `orgUrl` during Epic 3.
+- `list_recent_iterations` — last N iterations by start date (no equivalent MS primitive).
 
-**Claude Skills (5):**
+**Bulk-wired Microsoft tool domains (inherited, zero author code per tool):**
 
-- `/azdo-fetch-ticket` — single-ticket context retrieval
-- `/azdo-fetch-tickets` — batch retrieval with criteria
-- `/azdo-sprint-report` — iteration → markdown report
-- `/azdo-create-ticket` — conversational ticket creation
-- `/azdo-add-comment` — post comment from chat
+- `configureWorkItemTools` → `wit_*` (~23 tools): work-item CRUD, WIQL, batch fetch, comments, links — covers FR1-FR11, FR26.
+- `configureWorkTools` → `work_*`: iteration enumeration with `timeframe` filtering, team capacity, team settings — covers FR12-FR13.
+- `configureCoreTools` → `core_*` (Epic 3 Story 3.4, pending audit): project and team listing for picker UX in skills when env defaults are absent.
+
+All tools coexist in one MCP namespace (FR25, FR28). The author primitive count shrank from an original five because the read and write paths compose MS-inherited tools at the skill layer (see `specs/planning/research/skill-vs-primitive-read-path-2026-04-22.md` and `specs/planning/research/skill-vs-primitive-write-path-2026-04-22.md`).
+
+**Claude Skills:**
+
+- `/azdo-fetch-tickets` — unified read skill covering single-ticket and batch retrieval (originally two separate skills; merged during Epic 2 — one skill, one intent)
+- `/azdo-sprint-report` — iteration → markdown report, published as a comment on a target ticket
+- `/azdo-create-ticket` — conversational ticket creation (baseline in Story 3.1, link support added in Story 3.2)
+- `/azdo-add-comment` — post Markdown comment from chat
+
+Additional skills will ship in follow-up epics (e.g., `/azdo-prep-standup`, `/azdo-prep-retrospective`, PR-review skills). The original five-skill MVP target is met cumulatively across the full epic roadmap — FR20's literal enumeration reflects that aspiration.
 
 **Infrastructure:**
 
-- Deep-import of `@azure-devops/mcp@2.6.0` (pinned exact) — provides ecosystem-wide AzDO tool surface with MS raw-REST workarounds inherited.
+- `@azure-devops/mcp@2.6.0` (pinned exact) — bulk-wired per domain (`configureWorkItemTools`, `configureWorkTools`, pending `configureCoreTools`), providing ecosystem-wide AzDO tool surface. MS tools carry their own api-version selection internally (including `7.2-preview.4` for Markdown comments) — no author raw-REST code needed.
 - Node.js 24 LTS / TypeScript, pnpm, stdio transport.
 - `.env` loaded by Node's native `--env-file` flag (no `dotenv` package): `AZDO_ORG_URL`, `AZDO_PAT`, `AZDO_DEFAULT_PROJECT`, `AZDO_DEFAULT_TEAM`.
 - `.env` file with real configuration values; listed in `.gitignore` from the first commit. No separate `.env.example` template — simpler for a local personal tool.
@@ -170,31 +176,31 @@ Added organically as real pain emerges:
 
 **Opening scene.** Friday evening, sprint 34 just closed. Previously, Dmitry would open six Azure DevOps tabs, filter the board by iteration, click into each of twenty-three work items in turn, skim descriptions, type titles into a note-taking app, curse at the formatting, paste into a comment box on the epic, and publish. Thirty minutes of tab-switching, none of it thinking. This time, the board tab isn't open.
 
-**Rising action.** Dmitry opens Claude Code, types `/azdo-sprint-report`. Claude reads the skill's markdown, asks for the target iteration (offers "current" as default), builds WIQL with `@CurrentIteration('[project]\team')` and runs `wit_query_by_wiql` to get 23 IDs, then `wit_get_work_items_batch_by_ids` to fetch title/description/priority/state for each. Claude returns a markdown draft — grouped by state (Done / In Progress / Blocked), sorted by priority, one-line summaries per item. Dmitry reads it: accurate. He says "publish it as a comment on epic 4521." Claude calls `add_comment`. Done.
+**Rising action.** Dmitry opens Claude Code, types `/azdo-sprint-report`. Claude reads the skill's markdown, asks for the target iteration (offers "current" as default), builds WIQL with `@CurrentIteration('[project]\team')` and runs `wit_query_by_wiql` to get 23 IDs, then `wit_get_work_items_batch_by_ids` to fetch title/description/priority/state for each. Claude returns a markdown draft — grouped by state (Done / In Progress / Blocked), sorted by priority, one-line summaries per item. Dmitry reads it: accurate. He says "publish it as a comment on epic 4521." Claude calls `wit_add_work_item_comment` with `format: "Markdown"`. Done.
 
-**Climax.** The whole exchange took 90 seconds of wall-clock time and zero browser tabs. Dmitry checks the comment in Azure DevOps once, out of reflex — it's there, perfectly formatted, Markdown rendered correctly via Microsoft's api-version 7.2-preview.4 workaround he doesn't think about.
+**Climax.** The whole exchange took 90 seconds of wall-clock time and zero browser tabs. Dmitry checks the comment in Azure DevOps once, out of reflex — it's there, perfectly formatted, Markdown rendered correctly by MS's tool (which internally uses the right AzDO api-version — Dmitry doesn't think about it).
 
 **Resolution.** He closes Claude Code and goes home. The 30-minute weekly chore is now a slash-command. The product works.
 
-**Reveals requirements for:** `list_recent_iterations` (sprint-report's "last N sprints" scenario), MS-inherited `wit_query_by_wiql` + `wit_get_work_items_batch_by_ids` (query → batch read), `add_comment` (Markdown format), and the orchestrating `/azdo-sprint-report` skill with intent collection (target iteration, publish target).
+**Reveals requirements for:** `list_recent_iterations` (sprint-report's "last N sprints" scenario), MS-inherited `wit_query_by_wiql` + `wit_get_work_items_batch_by_ids` (query → batch read), `wit_add_work_item_comment` (Markdown format inherited from MS), and the orchestrating `/azdo-sprint-report` skill with intent collection (target iteration, publish target).
 
 ### Journey 2 — Dmitry, Follow-Up Ticket Composition
 
 **Opening scene.** Monday standup: a stakeholder asks for a follow-up ticket from feature 8812 to extend scope. Previously, Dmitry would open feature 8812, scan its description, open its three linked items by ID to remember context, copy-paste fragments into a blank "new work item" dialog, figure out which fields the template requires, click save, lose focus. Ten minutes. This time, he types into Claude.
 
-**Rising action.** Dmitry says: *"Pull feature 8812 and its children. Draft a follow-up ticket in the same format — scope: extending the export pipeline to support CSV. Link it to 8812 as Related."* Claude invokes `/azdo-create-ticket`, which fetches 8812 and its children via `get_work_item` and `list_work_items`, reads their descriptions to internalize tone and structure, drafts a title and Markdown description using the same template. Shows Dmitry the draft inline. Dmitry says "looks good, create it."
+**Rising action.** Dmitry says: *"Pull feature 8812 and its children. Draft a follow-up ticket in the same format — scope: extending the export pipeline to support CSV. Link it to 8812 as Related."* Claude invokes `/azdo-create-ticket`, which fetches 8812 and its children via `wit_get_work_items_batch_by_ids({ expand: "relations" })`, reads their descriptions to internalize tone and structure, drafts a title and Markdown description using the same template. Shows Dmitry the draft inline, iterates if Dmitry asks for edits, waits for an explicit "create it" per the project's mutation-confirmation rule.
 
-**Climax.** `create_work_item` runs; the ticket appears in AzDO with ID 9104. Claude replies with the ID and a link. Dmitry never left his terminal.
+**Climax.** On approval, Claude calls `wit_create_work_item` and then `wit_work_items_link` to wire the Related link; the ticket appears in AzDO with ID 9104. Claude replies with the ID and a URL it constructed from `orgUrl` / `project` / the new ID. Dmitry never left his terminal.
 
 **Resolution.** He moves on to actual coding. The plumbing that used to fragment his morning now fits in one conversational turn.
 
-**Reveals requirements for:** `get_work_item` (with linked-items expansion), `create_work_item` (full field control including templates and link types), and a composing `/azdo-create-ticket` skill that can read context and propose structure.
+**Reveals requirements for:** MS `wit_get_work_items_batch_by_ids` (with `expand: "relations"` for linked-items context), MS `wit_create_work_item` + `wit_work_items_link` (full field control including typed links via MS's native surface), author `get_project_context` extended with `orgUrl` (deterministic URL construction), and a composing `/azdo-create-ticket` skill that can read context, iterate on a draft, and wait for explicit approval.
 
 ### Journey 3 — Dmitry, Edge Case: Missing PAT Scope
 
 **Opening scene.** Dmitry just rotated his PAT. He typed the new token into `.env`, restarted Claude Code, and ran `/azdo-sprint-report`. Something is wrong.
 
-**Rising action.** The MCP server starts fine, the skill loads, the iteration list returns — but `get_work_items` returns a 401 Unauthorized. Claude surfaces the error raw: `"Azure DevOps API returned 401"`. Dmitry is annoyed but not surprised: he forgot to tick "Work Items (Read & Write)" when generating the new PAT.
+**Rising action.** The MCP server starts fine, the skill loads, the iteration list returns — but `wit_get_work_items_batch_by_ids` returns a 401 Unauthorized. Claude surfaces the error raw: `"Azure DevOps API returned 401"`. Dmitry is annoyed but not surprised: he forgot to tick "Work Items (Read & Write)" when generating the new PAT.
 
 **Climax.** He opens the PAT management page, regenerates the token with correct scopes (documented in the repo's README), updates `.env`, restarts the server, re-runs the skill. It works.
 
@@ -218,16 +224,18 @@ Added organically as real pain emerges:
 
 | Capability area | Journeys that require it | Source primitive / skill |
 |---|---|---|
-| Iteration resolution (current / by name / by ID) | 1 | WIQL `@CurrentIteration('[project]\team')` (via `wit_query_by_wiql`) for the skill-layer default; `list_recent_iterations` + MS `work_list_team_iterations` when a skill needs explicit enumeration |
-| Batch work-item fetch by iteration | 1 | `list_work_items` |
-| Batch work-item fetch with field selection | 1, 2 | `get_work_items` (via MS batch) |
-| Single work-item fetch with linked-items | 2 | `get_work_item` |
-| Work-item creation with link types | 2 | `create_work_item` |
-| Markdown comment posting | 1 | `add_comment` |
+| Iteration resolution (current / by name / by ID) | 1 | WIQL `@CurrentIteration('[project]\team')` (via MS `wit_query_by_wiql`) for the skill-layer default; `list_recent_iterations` (author) + MS `work_list_team_iterations` when a skill needs explicit enumeration |
+| Batch work-item fetch by iteration | 1 | MS `wit_query_by_wiql` → MS `wit_get_work_items_batch_by_ids` chain, orchestrated by `/azdo-fetch-tickets` skill |
+| Batch work-item fetch with field selection | 1, 2 | MS `wit_get_work_items_batch_by_ids` with `fields` / `expand` params |
+| Single work-item fetch with linked-items | 2 | MS `wit_get_work_items_batch_by_ids({ ids: [N], expand: "relations" })` |
+| Work-item creation with link types | 2 | MS `wit_create_work_item` + MS `wit_work_items_link`, orchestrated by `/azdo-create-ticket` skill (Stories 3.1 + 3.2) |
+| Markdown comment posting | 1 | MS `wit_add_work_item_comment` with `format: "Markdown"` |
+| Deterministic work-item URL construction | 2 | Author `get_project_context` returns `orgUrl`; skill concatenates `${orgUrl}/${project}/_workitems/edit/${id}` |
 | Error propagation to LLM (basic, unstructured) | 3 | MCP tool response shape |
+| Mutation confirmation (preview → edit → explicit approval) | 1, 2 | Project-wide rule `.claude/rules/mutation-confirmation.md`; every write skill follows it |
 | `.env` config with four required fields | 3, 4 | `src/config.ts` validation |
 | README + prerequisite documentation | 4 | Non-code deliverable |
-| Skill orchestration (multi-step, intent collection) | 1, 2 | 5 Claude Skills |
+| Skill orchestration (multi-step, intent collection) | 1, 2 | Claude Skills under `.claude/skills/azdo-*/` |
 
 ## Innovation & Novel Patterns
 
@@ -255,9 +263,9 @@ Consolidated from innovation analysis and scoping exercise. All risks tracked wi
 
 ### Technical Risks
 
-- **MS deep-import breakage on upgrade.** `@azure-devops/mcp`'s `dist/tools/*.js` paths are not part of a public API; Microsoft may reorganize them or change `configure*Tools` signatures at any release. **Mitigation:** pin exact version `2.6.0`; upgrades opt-in. Fallback path documented: reimplement 5 primitives directly on `azure-devops-node-api` (6-12h migration, raw-REST helpers for Markdown comments and wiki ETag already understood from research).
+- **MS bulk-wire breakage on upgrade.** `@azure-devops/mcp`'s `dist/tools/*.js` paths are not part of a public API; Microsoft may reorganize them or change `configure*Tools` signatures at any release. **Mitigation:** pin exact version `2.6.0`; upgrades opt-in. Fallback path: reimplement as author primitives the specific MS tools our skills depend on (primarily `wit_get_work_items_batch_by_ids`, `wit_query_by_wiql`, `wit_create_work_item`, `wit_work_items_link`, `wit_add_work_item_comment`, `work_list_team_iterations`) directly on `azure-devops-node-api`, borrowing the raw-REST helpers for Markdown comments and wiki ETag already understood from research. Scope is larger than today's author footprint but well under a day; skill-layer callers stay unchanged if tool names are preserved.
 - **stdio stdout pollution.** Any accidental write to stdout outside the SDK breaks JSON-RPC silently. **Mitigation:** convention enforced (all logging to stderr); MCP Inspector catches regressions during dev loop.
-- **Markdown-comment / wiki-write REST version gaps.** The typed `azure-devops-node-api` lags (`addComment` pinned to 7.1-preview.3, no wiki create/update method). **Mitigation:** pre-solved by MS's own raw-REST helpers inherited via deep-import — zero author-side risk at MVP.
+- **Markdown-comment / wiki-write REST version gaps.** The typed `azure-devops-node-api` lags (`addComment` pinned to 7.1-preview.3, no wiki create/update method). **Mitigation:** pre-solved by MS within their registered MCP tools (`wit_add_work_item_comment` already exposes `format: "Markdown"` and uses the right api-version internally; wiki tooling is deferred to Phase 2 — see FR27) — zero author-side risk at MVP.
 - **Skills DX brittleness.** Markdown orchestration may fail on edge cases (wrong iteration picked, empty state, hallucinated work-item IDs). **Mitigation:** ship five skills at MVP to expose failure patterns early; iterate on prompt quality via MCP Inspector; Growth backlog includes structured error translation.
 
 ### Strategic Risks
@@ -271,7 +279,7 @@ Consolidated from innovation analysis and scoping exercise. All risks tracked wi
 
 ### Resource Risks
 
-- **5-hour budget overrun.** **Mitigation:** pre-committed scope cuts in priority order: first drop `create_work_item` complexity (fields/links), then drop `/azdo-create-ticket` skill, then drop secondary skills. The sprint-report path (`list_recent_iterations`, MS `wit_query_by_wiql` + `wit_get_work_items_batch_by_ids`, `add_comment`, `/azdo-sprint-report`) is load-bearing and stays.
+- **5-hour budget overrun.** **Mitigation:** pre-committed scope cuts in priority order: first drop Epic 3 Story 3.2 (link support for `/azdo-create-ticket`), then drop Story 3.4 (MS core-tools bulk-wire for picker UX), then drop `/azdo-create-ticket` entirely, then drop secondary skills. The sprint-report path (`list_recent_iterations`, MS `wit_query_by_wiql` + `wit_get_work_items_batch_by_ids`, MS `wit_add_work_item_comment`, `/azdo-sprint-report`) is load-bearing and stays.
 - **Fatigue / context loss mid-build.** **Mitigation:** scaffolding-first (30 min); primitives one-at-a-time with MCP Inspector validation; each 45-minute block ends with a working-state checkpoint.
 
 ## cli_tool-Specific Requirements (MCP Server Adaptation)
@@ -290,23 +298,21 @@ AzDo MCP is a local MCP server: a Node/TypeScript process invoked by Claude Code
 
 ### Command Structure (MCP Tool Surface)
 
-**5 author-defined primitives** registered via `server.registerTool()`:
+**Author-defined primitives at MVP (2, after read/write-path skill-over-primitive decisions):**
 
 | Tool | Input schema (zod) | Returns |
 |---|---|---|
-| `get_work_item` | `{ id: number, expandLinks?: boolean }` | Work item JSON (title, description, state, priority, comments, linked items) |
-| `list_work_items` | `{ criteria: { iteration?: string, priority?: number, wiql?: string, ids?: number[] }, fields?: string[] }` | Array of work item JSONs (batch-fetched) |
-| `create_work_item` | `{ project: string, type: string, title: string, description?: string, fields?: Record<string,any>, links?: Array<{id, type}> }` | Created work item ID + URL |
-| `add_comment` | `{ workItemId: number, comment: string, format?: "Markdown" \| "Html" }` | Comment ID |
-| `list_recent_iterations` | `{ project: string, team: string, limit?: number (positive int, default 2) }` | Array of iteration objects (id, name, path, attributes) sorted by `startDate` descending; timeframe filtering delegated to MS-inherited `work_list_team_iterations` via bulk-wired `configureWorkTools` |
+| `get_project_context` | `{}` (zero-arg) | `{ project: string \| null, team: string \| null, orgUrl: string }` — configured defaults from `.env` so skills can build team-relative WIQL and construct work-item URLs. `orgUrl` added in Epic 3. |
+| `list_recent_iterations` | `{ project: string, team: string, limit?: number (positive int, default 2) }` | Array of iteration objects (id, name, path, attributes) sorted by `startDate` descending. MS has no top-N primitive; timeframe-filtered enumeration delegated to MS-inherited `work_list_team_iterations`. |
 
-**Deep-imported from `@azure-devops/mcp@2.6.0`:**
+**Bulk-wired from `@azure-devops/mcp@2.6.0` (inherited as first-class MCP tools, coexisting with author primitives in one namespace):**
 
-- `configureWorkItemTools(server, tokenProvider, connectionProvider, userAgentProvider)` — registers `wit_*` tools (~23 operations).
-- `configureWorkTools(...)` — registers `work_*` tools (iterations/capacity).
-- `configureWikiTools(...)` — registers `wiki_*` tools (including `wiki_create_or_update_page` with ETag handling).
+- `configureWorkItemTools(server, tokenProvider, clientProvider, userAgentProvider)` — Epic 1 — registers `wit_*` tools (~23 operations). Powers FR1–FR11 and FR26 via skills.
+- `configureWorkTools(...)` — Epic 2 — registers `work_*` tools (iterations, capacity, team settings). Powers FR12–FR13.
+- `configureCoreTools(...)` — Epic 3 Story 3.4 (pending audit) — registers `core_*` tools for project and team listing when available in the MS package.
+- `configureWikiTools(...)` — **deferred to Phase 2** — would power FR27 (wiki ETag retry). Wiki tooling is explicitly out of MVP.
 
-Tools from Microsoft's server coexist in the same namespace; no prefix collision with author's tools (MS uses `wit_/work_/wiki_` prefixes, author uses verb-leading names).
+No prefix collision: MS uses domain prefixes (`wit_`, `work_`, `core_`, `wiki_`); author primitives use verb-leading names. End-users invoke either without knowing which layer implements what (FR28).
 
 ### Output Formats
 
@@ -421,7 +427,7 @@ The following FR set defines the complete capability contract for AzDo MCP MVP. 
 ### Ecosystem Integration (Microsoft Tool Inheritance)
 
 - **FR25:** The system can expose Microsoft's `@azure-devops/mcp` tool set (work-items, work, wiki domains) alongside the author-defined primitives within a single MCP tool namespace.
-- **FR26:** When posting Markdown-formatted comments, the system can use Microsoft's pre-existing REST workaround (api-version `7.2-preview.4`) inherited via deep-import, without author-written REST code.
+- **FR26:** When posting Markdown-formatted comments, the system can rely on Microsoft's registered `wit_add_work_item_comment` tool (bulk-wired via `configureWorkItemTools` in Epic 1), which exposes a first-class `format: "Markdown" | "Html"` parameter and handles the underlying AzDO api-version selection internally. No author-written REST code is required, and no deep-import of raw-REST helpers is needed — the capability ships as an inherited MCP tool.
 - **FR27:** When creating or updating wiki pages, the system can use Microsoft's pre-existing ETag-retry behavior inherited via deep-import, without author-written REST code.
 - **FR28:** The user can invoke either author-defined tools or Microsoft-provided tools from Claude without needing to know which source implements which capability.
 
@@ -439,8 +445,8 @@ NFRs are scoped tightly. Categories that don't apply to a personal, single-user,
 ### Performance
 
 - **NFR-P1: MCP server cold start.** Time from Claude Code process-spawn to first `tools/list` response < 2 seconds on a developer workstation with Node 24 LTS. Measured via MCP Inspector.
-- **NFR-P2: Single tool-call latency.** For `get_work_item` and `add_comment` against an active Azure DevOps instance, end-to-end latency (MCP request → REST → response) < 1.5 seconds at the p95 over a single working day.
-- **NFR-P3: Batch fetch practicality.** `list_work_items` for an iteration with up to 50 items must return within 5 seconds. For iterations above 50 items, the system may use Microsoft's deep-imported batch behavior — Azure DevOps caps batches at 200 IDs per call, so the system must chunk internally above that threshold.
+- **NFR-P2: Single tool-call latency.** For a one-ID work-item fetch (`wit_get_work_items_batch_by_ids` with a single ID) and `wit_add_work_item_comment` against an active Azure DevOps instance, end-to-end latency (MCP request → REST → response) < 1.5 seconds at the p95 over a single working day.
+- **NFR-P3: Batch fetch practicality.** `wit_get_work_items_batch_by_ids` for an iteration with up to 50 items must return within 5 seconds. Azure DevOps caps batches at 200 IDs per call; skills must chunk above that threshold (MS's bulk-wired tool accepts chunked calls transparently).
 - **NFR-P4: End-to-end skill completion.** `/azdo-sprint-report` from invocation to markdown published must complete in < 2 minutes wall-clock for a 25-item iteration.
 
 ### Security
@@ -453,7 +459,7 @@ NFRs are scoped tightly. Categories that don't apply to a personal, single-user,
 
 ### Integration
 
-- **NFR-I1: Azure DevOps REST API.** The system must integrate with Azure DevOps Services (`dev.azure.com`) REST API version 7.1 (for wiki) and 7.2-preview.4 (for Markdown comments), inherited via `@azure-devops/mcp@2.6.0` deep-import. On-premises Azure DevOps Server is **not** supported in MVP.
+- **NFR-I1: Azure DevOps REST API.** The system must integrate with Azure DevOps Services (`dev.azure.com`). Author primitives reach AzDO via `azure-devops-node-api` through the shared `WebApi` singleton in `src/client.ts`. Microsoft-registered tools (bulk-wired via `@azure-devops/mcp@2.6.0` — `configureWorkItemTools` in Epic 1, `configureWorkTools` in Epic 2) handle their own REST api-version selection internally (e.g., `wit_add_work_item_comment` uses api-version `7.2-preview.4` under the hood for Markdown support; that version choice is an MS implementation detail, not an author-layer concern). On-premises Azure DevOps Server is **not** supported in MVP.
 - **NFR-I2: MCP protocol compliance.** The system must conform to the Model Context Protocol specification implemented by `@modelcontextprotocol/sdk` v1.29+ over stdio transport. Breaking changes in MCP spec are addressed through SDK upgrades on opt-in cadence.
 - **NFR-I3: Claude Code host.** The system must be invokable as an MCP server by Claude Code via a standard `.mcp.json` entry. Compatibility with other MCP hosts (VS Code, Cursor, Claude Desktop) is not guaranteed at MVP but is not deliberately broken.
 - **NFR-I4: Microsoft deep-import contract.** The system must consume `@azure-devops/mcp@2.6.0` via exact-version pinning, calling its exported `configure*Tools(server, tokenProvider, connectionProvider, userAgentProvider)` functions. Compatibility with newer versions is opt-in and requires manual re-verification.

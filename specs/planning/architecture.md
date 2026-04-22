@@ -28,7 +28,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 - Iteration Management (FR12–FR14) — list, filter by timeframe, name→GUID resolution.
 - Skill Orchestration (FR15–FR20) — skill discovery, invocation, compound sequencing, conversational parameter collection; five reference skills at MVP.
 - Configuration and Identity (FR21–FR24) — `.env`-based config, fail-fast validation, PAT auth, host registration.
-- Ecosystem Integration (FR25–FR28) — Microsoft `@azure-devops/mcp` deep-import, coexistence in a single tool namespace, inheritance of Microsoft's raw-REST workarounds (Markdown comments, wiki ETag retry).
+- Ecosystem Integration (FR25–FR28) — Microsoft `@azure-devops/mcp` bulk-wired per domain (`configureWorkItemTools`, `configureWorkTools`, plus `configureCoreTools` pending Epic 3 Story 3.4 audit; `configureWikiTools` deferred to Phase 2 with FR27). Coexistence in a single tool namespace. MS tools handle their own AzDO api-version selection internally (e.g., Markdown comments via `wit_add_work_item_comment`); no author raw-REST code is required at MVP.
 - Protocol Compliance and Error Handling (FR29–FR32) — MCP specification adherence, response shape, error propagation, stdout discipline.
 
 **Non-Functional Requirements:** 22 NFRs across 5 dimensions:
@@ -60,7 +60,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 - **Authentication propagation.** A single PAT is loaded from `.env` at startup. `getPersonalAccessTokenHandler(PAT)` wraps a singleton `WebApi` instance. Provider functions (`tokenProvider`, `clientProvider`, `userAgentProvider`) deliver the same credential to deep-imported Microsoft tool registrations. No second auth stack.
 - **stdio-stdout invariant.** JSON-RPC owns stdout exclusively. Any direct `console.log` outside the SDK corrupts the protocol silently. All diagnostic output routes to stderr. Enforced by convention; validated in the dev loop via MCP Inspector.
-- **Deep-import fragility.** `@azure-devops/mcp/dist/tools/*.js` is unsupported API surface. Mitigated by exact-version pinning on `2.6.0`. If Microsoft reorganizes the dist structure, the fallback plan is to reimplement the five primitives directly on `azure-devops-node-api`, borrowing the already-understood raw-REST helpers for Markdown comments and wiki page ETag retry from the research document.
+- **Deep-import fragility.** `@azure-devops/mcp/dist/tools/*.js` is unsupported API surface. Mitigated by exact-version pinning on `2.6.0`. If Microsoft reorganizes the dist structure, the fallback plan is to reimplement the specific MS tools our skills depend on (primarily `wit_get_work_items_batch_by_ids`, `wit_query_by_wiql`, `wit_create_work_item`, `wit_work_items_link`, `wit_add_work_item_comment`, and `work_list_team_iterations`) as thin author primitives directly on `azure-devops-node-api`, borrowing the already-understood raw-REST helpers for Markdown comments (api-version `7.2-preview.4`) and wiki page ETag retry from the research document. Fallback scope is larger than the MVP author footprint but still well under a day's work, and the skill-layer callers would not need to change (tool names stay identical).
 - **Error pass-through.** No custom error translation layer at MVP. Raw Azure DevOps API errors propagate through the MCP response shape (`{ content, isError }`) so Claude can surface them conversationally to the user. Structured translation (e.g., "PAT missing scope X") is Phase 2 scope.
 - **Pure-function extraction.** Compound logic that exceeds trivial request/response mapping (e.g., `formatReport` for Markdown report generation) factors into `src/utils/` with corresponding `test/` coverage. Skills and primitives stay thin; anything testable is extracted.
 - **Skill-authoring boundary.** Runtime artifact = `.claude/skills/<name>/SKILL.md` (host-side, markdown only, no rebuild). Code artifact = `src/tools/<area>.ts` (requires `tsc` rebuild + Claude Code session restart). Skill authors never touch source; primitive authors touch both. This boundary is load-bearing for the extensibility claim in the PRD.
@@ -239,7 +239,7 @@ Tool registration pattern, provider pattern for deep-import, input validation, e
 ### Cross-Cutting Patterns
 
 - **Tool module convention.** Each domain = one file in `src/tools/` exporting (a) pure async functions that take `(conn: WebApi, params): Promise<T>` and (b) a `register*Tools(server: McpServer)` function. The `register` function is called once from `src/index.ts`. This pattern enables unit-testing pure functions with structural `WebApi` mocks, per NFR-M3.
-- **Provider pattern for deep-import.** `src/client.ts` exports the singleton `getClient()` plus three callable providers (`tokenProvider`, `clientProvider`, `userAgentProvider`) required by Microsoft's `configure*Tools(server, ...)` contract. `clientProvider` is our local binding name; Microsoft's function signature names the corresponding parameter `connectionProvider`. TypeScript accepts positional callers, so the local name is ours to choose. All four pointer-targets live in one file to keep the MS contract local.
+- **Provider pattern for deep-import.** `src/client.ts` exports the singleton `getClient()` (the only module that instantiates `WebApi`). A sibling `src/ms-providers.ts` exports the three callable providers (`tokenProvider`, `clientProvider`, `userAgentProvider`) required by Microsoft's `configure*Tools(server, ...)` contract, shared across every domain wrapper that calls an MS configure-function (extracted during Epic 2 Story 2.3 when more than one `src/tools/*.ts` needed them). `clientProvider` is our local binding name; Microsoft's function signature names the corresponding parameter `connectionProvider`. TypeScript accepts positional callers, so the local name is ours to choose.
 - **File naming convention.** Kebab-case for files (`work-items.ts`), camelCase for functions (`registerIterationTools`, `getClient`), PascalCase for types (`IterationWorkItemResult`). Matches Node/TS ecosystem norms.
 - **Package entry points.** `"type": "module"` (ESM only). No `"main"`/`"exports"`/`"bin"` at MVP — `.mcp.json` spawns `node --env-file=.env --import tsx src/index.ts` directly (pure TS runtime, native `.env` loading). Optional `"bin"` is Phase 2 if published to npm.
 - **Git hooks.** **None at MVP.** No husky, no lint-staged, no pre-commit. Dependency surface minimized. Manual discipline + `.gitignore` cover the secret-commit risk.
@@ -252,7 +252,7 @@ Tool registration pattern, provider pattern for deep-import, input validation, e
 
 1. Scaffold project (`pnpm init`, deps, `tsconfig.json`, directory skeleton) — Phase 0 of MVP roadmap.
 2. Implement `src/config.ts` (env validation, fail-fast on missing keys).
-3. Implement `src/client.ts` (WebApi singleton + three providers).
+3. Implement `src/client.ts` (WebApi singleton) and `src/ms-providers.ts` (shared tokenProvider/clientProvider/userAgentProvider for MS bulk-wires).
 4. Implement `src/index.ts` (server boot, MS deep-imports, stdio transport).
 5. Verify with MCP Inspector against live AzDO (MS tools reachable, auth works).
 6. Implement each primitive in `src/tools/<area>.ts` one at a time, verifying via Inspector after each.
@@ -289,7 +289,7 @@ Tool registration pattern, provider pattern for deep-import, input validation, e
 
 **MCP Tool names:**
 
-- Author tools: verb-leading, snake_case, no prefix: `create_work_item`, `add_comment`, `list_recent_iterations`, `get_project_context`.
+- Author tools: verb-leading, snake_case, no prefix. Current MVP surface: `list_recent_iterations`, `get_project_context`. (Original plan included `get_work_item`, `list_work_items`, `create_work_item`, `add_comment`; all abandoned in favor of skill-layer composition over MS-inherited tools — see the skill-vs-primitive research docs.)
 - Microsoft deep-imported tools keep their upstream prefixes (`wit_*`, `wiki_*`, `work_*`).
 
 **Claude Skill names:**
@@ -309,14 +309,14 @@ src/
 ├── index.ts              # server boot, stdio connect, register all tools
 ├── config.ts             # validate process.env (loaded natively by Node --env-file)
 ├── client.ts             # WebApi singleton + three providers for MS deep-import
+├── ms-providers.ts       # shared helpers (tokenProvider, clientProvider, userAgentProvider) for MS bulk-wires
 └── tools/
-    ├── work-items.ts     # create_work_item + MS `configureWorkItemTools` bulk-wire (`wit_*`)
-    ├── comments.ts       # add_comment
-    ├── iterations.ts     # list_recent_iterations + MS `configureWorkTools` bulk-wire (`work_*`)
-    └── project-context.ts # get_project_context
+    ├── work-items.ts     # MS `configureWorkItemTools` bulk-wire (`wit_*`) — no author primitives
+    ├── comments.ts       # deprecated/empty — `add_comment` primitive abandoned after Epic 3 write-path pivot; kept as a placeholder, may be removed as cleanup
+    ├── iterations.ts     # list_recent_iterations (author) + MS `configureWorkTools` bulk-wire (`work_*`)
+    └── project-context.ts # get_project_context (returns { project, team, orgUrl })
 .claude/skills/
-├── azdo-fetch-ticket/SKILL.md
-├── azdo-fetch-tickets/SKILL.md
+├── azdo-fetch-tickets/SKILL.md  # unified read skill (merged original fetch-ticket + fetch-tickets)
 ├── azdo-sprint-report/SKILL.md
 ├── azdo-create-ticket/SKILL.md
 └── azdo-add-comment/SKILL.md
@@ -510,28 +510,25 @@ azdo-mcp/
 ├── src/
 │   ├── index.ts                  # entry: load .env → construct server → wire tools → stdio
 │   ├── config.ts                 # validate env, export typed config object
-│   ├── client.ts                 # WebApi singleton + tokenProvider/clientProvider/userAgentProvider
+│   ├── client.ts                 # WebApi singleton
+│   ├── ms-providers.ts           # shared tokenProvider/clientProvider/userAgentProvider for MS configure* calls
 │   └── tools/
-│       ├── iterations.ts         # list_recent_iterations + MS `configureWorkTools` bulk-wire
-│       ├── work-items.ts         # create_work_item + MS `configureWorkItemTools` bulk-wire
-│       ├── comments.ts           # add_comment
-│       └── project-context.ts    # get_project_context
-└── .claude/
-    ├── .mcp.json                 # ready-to-run MCP host entry, relative paths
-    └── skills/
-        ├── azdo-fetch-ticket/
-        │   └── SKILL.md
-        ├── azdo-fetch-tickets/
-        │   └── SKILL.md
-        ├── azdo-sprint-report/
-        │   └── SKILL.md
-        ├── azdo-create-ticket/
-        │   └── SKILL.md
-        └── azdo-add-comment/
-            └── SKILL.md
+│       ├── iterations.ts         # list_recent_iterations (author) + MS `configureWorkTools` bulk-wire
+│       ├── work-items.ts         # MS `configureWorkItemTools` bulk-wire — no author primitives
+│       ├── comments.ts           # deprecated/empty — author `add_comment` abandoned; candidate for cleanup
+│       └── project-context.ts    # get_project_context ({ project, team, orgUrl })
+├── .claude/
+│   ├── .mcp.json                 # ready-to-run MCP host entry, relative paths
+│   ├── rules/
+│   │   └── mutation-confirmation.md  # project-wide rule for write-skills: preview → edit loop → explicit approval
+│   └── skills/
+│       ├── azdo-fetch-tickets/SKILL.md   # unified read skill (merged original fetch-ticket + fetch-tickets)
+│       ├── azdo-sprint-report/SKILL.md
+│       ├── azdo-create-ticket/SKILL.md
+│       └── azdo-add-comment/SKILL.md
 ```
 
-**Totals:** 4 source files (entry + config + client + 3 tool modules); 5 skill markdown files; 6 repo-level files (README, package.json, lockfile, tsconfig, gitignore, `.env`); 1 ready-to-run MCP host config inside `.claude/`. No tests, no dist, no utils, no CI config, no LICENSE at MVP.
+**Totals:** 5 source files (entry + config + client + ms-providers + 3 active tool modules, 1 deprecated-empty); 4 active skill markdown files (more to ship in post-MVP epics to reach the original five-skill aspiration); 6 repo-level files (README, package.json, lockfile, tsconfig, gitignore, `.env`); 1 ready-to-run MCP host config; project-wide rule for mutation confirmation. No tests, no dist, no utils, no CI config, no LICENSE at MVP.
 
 ### Root Configuration Files
 
@@ -575,7 +572,7 @@ azdo-mcp/
 
 - `src/index.ts` → the only integration point. Owns server lifecycle, registers all tool domains (author's own + MS deep-imports), connects stdio transport.
 - `src/config.ts` → the only module that reads `process.env`. Environment variables are loaded by Node natively via `--env-file=.env`; no `dotenv` import needed. Everything else consumes a typed `config` export.
-- `src/client.ts` → the only module that instantiates `WebApi`. Exposes `getClient()` + three providers. All AzDO API access flows through here.
+- `src/client.ts` → the only module that instantiates `WebApi`. Exposes `getClient()`. All AzDO API access flows through here. The three MS-configure providers live in a sibling `src/ms-providers.ts` and consume `getClient()` internally.
 - `src/tools/*.ts` → the only modules that register MCP tools. Each file owns one domain and exports `register<Domain>Tools(server)` (public controller) plus any reusable pure operations (public) and private helpers (default).
 
 **External boundaries:**
@@ -594,18 +591,20 @@ azdo-mcp/
 
 | Capability area (PRD) | FR range | Implementation location |
 |---|---|---|
-| Work Item Retrieval | FR1–FR7 | `src/tools/work-items.ts` (`get_work_item`, `list_work_items`) |
-| Work Item Creation | FR8–FR9 | `src/tools/work-items.ts` (`create_work_item`) |
-| Work Item Commenting | FR10–FR11 | `src/tools/comments.ts` (`add_comment`) |
-| Iteration Management | FR12–FR14 | `src/tools/iterations.ts` (`list_recent_iterations` + MS `configureWorkTools` bulk-wire → `work_list_team_iterations` covers timeframe) |
-| Skill Orchestration | FR15–FR20 | `.claude/skills/azdo-*/SKILL.md` (five markdown files) |
+| Work Item Retrieval | FR1–FR7 | `.claude/skills/azdo-fetch-tickets/SKILL.md` orchestrates MS `wit_query_by_wiql` + `wit_get_work_items_batch_by_ids` (bulk-wired via `src/tools/work-items.ts`). Author `get_project_context` supplies team-relative WIQL inputs. |
+| Work Item Creation | FR8 | `.claude/skills/azdo-create-ticket/SKILL.md` (Story 3.1) → MS `wit_create_work_item` |
+| Work Item Linking | FR9 | `.claude/skills/azdo-create-ticket/SKILL.md` (Story 3.2) → MS `wit_work_items_link` with multi-link batch + all-or-nothing pre-validation |
+| Work Item Commenting | FR10–FR11, FR26 | `.claude/skills/azdo-add-comment/SKILL.md` → MS `wit_add_work_item_comment` (native `format: "Markdown"`, default). `src/tools/comments.ts` is deprecated/empty — author primitive abandoned. |
+| Iteration Management | FR12–FR14 | `src/tools/iterations.ts` (`list_recent_iterations` — author) + MS `configureWorkTools` bulk-wire (`work_list_team_iterations` covers timeframe filter) |
+| Skill Orchestration | FR15–FR20 | `.claude/skills/azdo-*/SKILL.md` (4 skills at current MVP-in-progress; original 5-skill aspiration met cumulatively across the roadmap) |
+| Mutation confirmation (cross-cutting for every write skill) | Project rule | `.claude/rules/mutation-confirmation.md` — preview → edit loop → explicit approval, referenced by each write skill's AC |
 | Configuration and Identity | FR21–FR24 | `src/config.ts`, `src/client.ts`, `.env`, `.claude/.mcp.json` |
-| Ecosystem Integration (MS deep-import) | FR25–FR28 | `src/tools/<domain>.ts` wrappers (each calls its MS `configure*Tools` and re-exports as `register<Domain>Tools(server)`), inherits via pnpm dep |
+| Ecosystem Integration (MS bulk-wire) | FR25–FR28 | `src/tools/<domain>.ts` wrappers each call their MS `configure*Tools`; `configureWorkItemTools` (Epic 1), `configureWorkTools` (Epic 2), `configureCoreTools` (Epic 3 Story 3.4, pending audit). `configureWikiTools` deferred with FR27. |
 | Protocol Compliance / Errors | FR29–FR32 | `src/index.ts` (stdio transport), per-tool `try/catch` in every `register*Tools` handler |
 
 **Cross-cutting concerns mapping:**
 
-- **Authentication propagation** → `src/client.ts` (singleton PAT handler behind `getClient()`); three MS-provider callbacks (`tokenProvider`, `clientProvider`, `userAgentProvider`) are private to each `src/tools/<domain>.ts` wrapper.
+- **Authentication propagation** → `src/client.ts` (singleton PAT handler behind `getClient()`); three MS-provider callbacks (`tokenProvider`, `clientProvider`, `userAgentProvider`) live in `src/ms-providers.ts` and are imported by every `src/tools/<domain>.ts` that bulk-wires MS tools.
 - **stdio-stdout invariant** → enforced by convention across `src/**`; no runtime `console.*` calls.
 - **Deep-import fragility** → isolated to each `src/tools/<domain>.ts` via the matching `configure*Tools` call; fallback plan reimplements directly on `azure-devops-node-api` inside the same file if MS deep-import breaks.
 - **Error pass-through** → isolated to `register*Tools` handlers in each tool file; pure operations throw.
@@ -615,13 +614,13 @@ azdo-mcp/
 
 **Internal communication (within the server process):**
 
-- `src/index.ts` calls `registerIterationTools(server)`, `registerWorkItemTools(server)`, `registerCommentTools(server)` and MS `configure*Tools(server, ...)` sequentially at boot.
+- `src/index.ts` calls `registerProjectContextTools(server)` then the domain `register*Tools` functions (`registerIterationTools`, `registerWorkItemTools`) sequentially at boot. Each domain wrapper calls its own MS `configure*Tools(server, ...)` as part of registration so author tools and MS-inherited tools appear together in `tools/list`. `registerCommentTools` is not called — `src/tools/comments.ts` is a deprecated placeholder with no primitives after the Epic 3 write-path pivot.
 - Tool handlers call `getClient()` from `src/client.ts` on each invocation; the client is a lazy singleton.
 - Pure operations in `src/tools/*.ts` accept `api: WebApi` explicitly — no global state access.
 
 **External integrations:**
 
-- Azure DevOps Services REST API 7.1 (wiki) + 7.2-preview.4 (markdown comments) via `azure-devops-node-api` and MS-provided raw-REST helpers.
+- Azure DevOps Services REST reached through two paths: (a) `azure-devops-node-api` for author primitives (`get_project_context`, `list_recent_iterations`); (b) MS-registered tools bulk-wired from `@azure-devops/mcp@2.6.0` for everything else. MS tools handle their own api-version selection (including `7.2-preview.4` for Markdown comments in `wit_add_work_item_comment`).
 - Claude Code MCP host via stdio JSON-RPC (`@modelcontextprotocol/sdk`).
 - No other external services. No telemetry. No analytics.
 

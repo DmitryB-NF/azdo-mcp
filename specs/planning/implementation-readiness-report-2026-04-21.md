@@ -14,9 +14,27 @@ status: 'complete'
 
 # Implementation Readiness Assessment Report
 
-**Date:** 2026-04-21
+**Date:** 2026-04-21 (initial assessment) · **Last synced:** 2026-04-22
 **Project:** AzDo MCP
 **Assessor:** BMad Implementation Readiness workflow
+
+---
+
+## Sync log
+
+**2026-04-22 — Post Epic 2 + Epic 3 design pivots.** Both epics shifted from author-primitive implementations to skill-layer composition over MS-inherited tools, with a new project-wide mutation-confirmation rule for write skills. Sections affected and updated in-place:
+
+- Step 3 Epic ↔ FR Coverage Map — rebuilt with current story IDs and tool attribution (MS tools now carry most of the FR1–FR11 load; author primitive surface shrank to `get_project_context` + `list_recent_iterations`).
+- Step 4 UX Alignment — story ID references updated.
+- Step 5 Dependency Audit — story structure of Epics 2 and 3 updated.
+- Step 6 Recommended Next Steps — scope-cut priority order updated to reflect current story shape (no `create_work_item` primitive to drop).
+
+Decisions captured in:
+- [`research/skill-vs-primitive-read-path-2026-04-22.md`](research/skill-vs-primitive-read-path-2026-04-22.md)
+- [`research/skill-vs-primitive-write-path-2026-04-22.md`](research/skill-vs-primitive-write-path-2026-04-22.md)
+- [`../../.claude/rules/mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md)
+
+The original 🟢 READY status from 2026-04-21 still holds; the pivots clarified and simplified the plan rather than introducing gaps.
 
 ---
 
@@ -68,13 +86,13 @@ All NFRs measurable with clear pass/fail criteria.
 Ported from Architecture document into Epic 1 scope:
 
 - Starter scaffold command sequence (→ Story 1.1)
-- `node --env-file=.env --import tsx src/index.ts` runtime (→ Story 1.4)
+- `node --env-file=.env --import tsx src/index.ts` runtime (→ Story 1.3)
 - `.claude/.mcp.json` committed ready-to-run (→ Story 1.1)
-- Module boundaries (→ enforced by Stories 1.2, 1.3, 1.4)
+- Module boundaries (→ enforced by Stories 1.2, 1.3)
 - Code shape: MCP registration top → public ops → private helpers (→ Stories 2.x, 3.x)
-- Three callable providers for MS deep-import (→ Story 1.3)
+- Three callable providers for MS deep-import, extracted to shared `src/ms-providers.ts` (→ Story 1.3, refactored during Story 2.3)
 - Canonical `tsconfig.json` (→ Story 1.1)
-- Startup error-handling pattern (→ Story 1.4)
+- Startup error-handling pattern (→ Story 1.3)
 - `.env` gitignored from first commit (→ Story 1.1)
 
 ### PRD Completeness Assessment
@@ -85,44 +103,46 @@ Ported from Architecture document into Epic 1 scope:
 
 ## Step 3 — Epic Coverage Validation ✅
 
-### Epic ↔ FR Coverage Map
+### Epic ↔ FR Coverage Map (2026-04-22 resync)
 
-| FR | Epic | Story | Verified |
+| FR | Epic | Story | Mechanism |
 |---|---|---|---|
-| FR1 | Epic 2 | 2.1 | ✅ `get_work_item` AC |
-| FR2 | Epic 2 | 2.1 | ✅ response fields in AC |
-| FR3 | Epic 2 | 2.2 | ✅ `ids` criterion AC |
-| FR4 | Epic 2 | 2.2 | ✅ `iteration` criterion AC |
-| FR5 | Epic 2 | 2.2 | ✅ `priority` criterion AC |
-| FR6 | Epic 2 | 2.2 | ✅ `wiql` criterion AC |
-| FR7 | Epic 2 | 2.2 | ✅ `fields` param AC |
-| FR8 | Epic 3 | 3.1 | ✅ `create_work_item` AC |
-| FR9 | Epic 3 | 3.1 | ✅ `links` param AC |
-| FR10 | Epic 3 | 3.2 | ✅ `add_comment` AC |
-| FR11 | Epic 3 | 3.2 | ✅ format param + api-version 7.2-preview.4 AC |
-| FR12 | Epic 2 | 2.3 | ✅ `list_team_iterations` AC |
-| FR13 | Epic 2 | 2.3 | ✅ `timeframe` param AC |
-| FR14 | Epic 2 | 2.5 / 4.1 | ✅ skill resolves name→GUID via two tool calls |
-| FR15 | Epic 1 | 1.1 | ✅ `.claude/skills/` scaffolded |
-| FR16 | Epic 2/3/4 | 2.4, 2.5, 3.3, 3.4, 4.1 | ✅ each skill has slash-command AC |
-| FR17 | Epic 2/3/4 | 2.5, 3.3, 4.1 | ✅ multi-tool orchestration in SKILL.md |
-| FR18 | Epic 2/3/4 | 2.4, 2.5, 3.3, 3.4, 4.1 | ✅ conversational parameter collection in AC |
-| FR19 | Epic 1 + reinforced | 1.1 + all skill stories | ✅ markdown edits require no rebuild |
-| FR20 | across epics | 2.4, 2.5, 3.3, 3.4, 4.1 = 5 skills | ✅ final count matches |
-| FR21 | Epic 1 | 1.2 | ✅ `src/config.ts` loads env |
-| FR22 | Epic 1 | 1.2 + 1.4 | ✅ fail-fast in config + top-level catch |
-| FR23 | Epic 1 | 1.3 | ✅ `getPersonalAccessTokenHandler` in `src/client.ts` |
-| FR24 | Epic 1 | 1.1 | ✅ `.claude/.mcp.json` committed |
-| FR25 (work-items only) | Epic 1 | 1.4 | ✅ `configureWorkItemTools` in `src/index.ts` |
-| FR26 | Epic 3 | 3.2 | ✅ raw fetch, api-version 7.2-preview.4 |
-| FR27 | — deferred | N/A (Phase 2) | ✅ explicitly documented as deferred |
-| FR28 | Epic 1 | 1.4 | ✅ `tools/list` shows MS + author tools |
-| FR29 | Epic 1 | 1.4 | ✅ stdio transport + MCP spec |
-| FR30 | Epic 1 + per tool | 1.4 + 2.x + 3.x | ✅ pattern enforced |
-| FR31 | Epic 1 + per tool | 1.4 + try/catch pattern | ✅ isError propagation |
-| FR32 | Epic 1 + per tool | 1.4 + no console.log | ✅ enforced by convention |
+| FR1 fetch single | Epic 2 | 2.1 | Skill `/azdo-fetch-tickets` → MS `wit_get_work_items_batch_by_ids({ ids: [N] })` |
+| FR2 fields returned | Epic 2 | 2.1 | Same call; MS response carries title/state/priority/description/relations |
+| FR3 fetch multiple by IDs | Epic 2 | 2.1 | Same call with multi-ID array |
+| FR4 fetch by iteration | Epic 2 | 2.1 | Skill builds WIQL with `@CurrentIteration('[project]\team')` → MS `wit_query_by_wiql` → MS `wit_get_work_items_batch_by_ids` |
+| FR5 filter by priority | Epic 2 | 2.1 | Skill builds WIQL with `[Microsoft.VSTS.Common.Priority] = N` → query → batch |
+| FR6 WIQL query | Epic 2 | 2.1 | MS `wit_query_by_wiql` (user's raw SELECT passed verbatim) |
+| FR7 field subset | Epic 2 | 2.1 | `fields` param on MS `wit_get_work_items_batch_by_ids` |
+| FR8 create work item | Epic 3 | 3.1 | Skill `/azdo-create-ticket` → MS `wit_create_work_item` (fields array incl. System.Title, System.Description as Markdown) |
+| FR9 create with links | Epic 3 | 3.2 | Same skill extended → MS `wit_work_items_link` (multi-link batch + all-or-nothing pre-validation) |
+| FR10 post comment | Epic 3 | 3.3 | Skill `/azdo-add-comment` → MS `wit_add_work_item_comment` |
+| FR11 Markdown format | Epic 3 | 3.3 | MS `wit_add_work_item_comment.format: "Markdown"` (default) |
+| FR12 list iterations | Epic 2 | 2.3 | Author `list_recent_iterations` (top-N) + MS `work_list_team_iterations` (full enumeration) |
+| FR13 timeframe filter | Epic 2 | 2.3 | MS `work_list_team_iterations.timeframe` param |
+| FR14 iteration name→GUID | Epic 2 | 2.1 / 4.1 | Skill-orchestrated; no tool change required |
+| FR15 skill discovery | Epic 1 | 1.1 | `.claude/skills/` layout established; reinforced every epic |
+| FR16 slash-command trigger | Epics 2/3/4 | 2.1, 3.1, 3.3, 4.1 | Each skill has slash-command AC |
+| FR17 multi-tool compound skill | Epics 2/3/4 | 2.1, 3.1, 3.2, 3.3, 4.1 | Skills orchestrate sequentially |
+| FR18 conversational param collection | Epics 2/3/4 | 2.1, 3.1, 3.2, 3.3, 4.1 | Each skill asks for missing inputs (AC) |
+| FR19 edit skill without rebuild | Epic 1 | 1.1 + all skill stories | Markdown-only runtime |
+| FR20 ship skill set | Epics 2/3/4 | 2.1, 3.1, 3.3, 4.1 = 4 skills at MVP | Original 5-skill aspiration met cumulatively across the epic roadmap (additional skills ship in post-MVP epics) |
+| FR21 `.env` config load | Epic 1 | 1.2 | `src/config.ts` + native `--env-file` |
+| FR22 fail-fast on missing env | Epic 1 | 1.2 / 1.3 | Throws at module-load |
+| FR23 PAT auth | Epic 1 | 1.3 | `src/client.ts` + `getPersonalAccessTokenHandler` |
+| FR24 `.mcp.json` host entry | Epic 1 | 1.1 | `.claude/.mcp.json` committed |
+| FR25 MS tools in namespace | Epic 1 / 2 / 3 | 1.3 + 2.3 + 3.4 (pending) | `configureWorkItemTools` (1.3), `configureWorkTools` (2.3), `configureCoreTools` (3.4 pending audit), `configureWikiTools` deferred with FR27 |
+| FR26 MD comment workaround | Epic 3 | 3.3 | Inherited via MS `wit_add_work_item_comment` — MS handles the `7.2-preview.4` call internally; no author raw-REST code |
+| FR27 wiki ETag workaround | — | — | Deferred to Phase 2 (no wiki primitive or `configureWikiTools` wire at MVP) |
+| FR28 unified namespace | Epic 1 | 1.3 | Author tools + MS `wit_*` etc. coexist |
+| FR29 MCP spec compliance | Epic 1 | 1.3 | `@modelcontextprotocol/sdk` stdio |
+| FR30 response shape | Epic 1 + per tool | 1.3 + per-story | Pattern enforced |
+| FR31 error propagation | Epic 1 + per tool | 1.3 + try/catch pattern | `isError: true` pass-through |
+| FR32 stdout discipline | Epic 1 + per tool | 1.3 + convention | No `console.log` in runtime |
 
-**Coverage summary:** **31 / 32 FRs covered at MVP.** FR27 (wiki ETag workaround) explicitly deferred to Phase 2 — documented in Epic 1 scope and Architecture Risks.
+**Coverage summary:** **31 / 32 FRs covered at MVP.** FR27 (wiki ETag workaround) explicitly deferred to Phase 2.
+
+**Project-wide rule for write skills:** [`.claude/rules/mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md) — every write skill (`/azdo-create-ticket`, `/azdo-add-comment`, `/azdo-sprint-report`) must render a preview, accept explicit user approval or edits, and only then mutate. Enforced through each write story's AC rather than a dedicated FR line.
 
 ### No uncovered FRs
 
@@ -138,7 +158,7 @@ Every story maps back to one or more FRs. No story exists for speculative or out
 
 **N/A by design.** AzDo MCP has no UI. All user interaction happens through Claude Code's chat interface, orchestrated by five `SKILL.md` markdown files whose interaction patterns (step ordering, parameter prompts, confirmation phrasing, error handling) are embedded in the skill files themselves.
 
-**Verification:** every skill story (2.4, 2.5, 3.3, 3.4, 4.1) contains explicit AC covering:
+**Verification:** every skill story (2.1, 3.1, 3.2, 3.3, 4.1) contains explicit AC covering:
 
 - Slash-command trigger availability
 - Missing-parameter conversational prompting
@@ -174,11 +194,11 @@ No separate UX spec was required or produced.
 
 ### Dependency Audit
 
-**Within-epic:**
+**Within-epic (resynced 2026-04-22 after Epic 2 + Epic 3 pivots):**
 
-- Epic 1: 1.1 → 1.2 → 1.3 → 1.4 (linear)
-- Epic 2: 2.1 → 2.2 (same file), 2.3 (new file), 2.4 depends on 2.1, 2.5 depends on 2.2 + 2.3
-- Epic 3: 3.1 (adds to work-items.ts), 3.2 (new file comments.ts), 3.3 depends on 3.1 + 2.1, 3.4 depends on 3.2
+- Epic 1: 1.1 → 1.2 → 1.3 (linear — Story 1.4 merged into 1.3 as "running MCP server with MS work-items tools")
+- Epic 2: 2.1 (unified `/azdo-fetch-tickets` skill + `get_project_context` support tool) → 2.3 (`list_recent_iterations` + MS work-domain bulk-wire). Original 2.2 / 2.4 / 2.5 collapsed into 2.1 per the skill-vs-primitive read-path research.
+- Epic 3: 3.1 (`/azdo-create-ticket` baseline, create-only) → 3.2 (link-support extension to same skill) → 3.3 (`/azdo-add-comment` skill) → 3.4 (MS core-tools bulk-wire for picker UX — independent augmentation). Original 3.1 / 3.2 author primitives abandoned per the skill-vs-primitive write-path research.
 - Epic 4: 4.1 standalone markdown
 
 **Cross-epic:**
@@ -192,10 +212,10 @@ No separate UX spec was required or produced.
 ### Architecture Compliance
 
 - ✅ Starter setup (scaffold command) is Epic 1 Story 1.1 — matches BMad pattern.
-- ✅ Module boundaries enforced by story AC (`process.env` only in 1.2, `new WebApi` only in 1.3, deep-imports only in 1.4).
-- ✅ Code shape discipline encoded in tool stories (2.1 AC explicitly verifies file-shape ordering).
+- ✅ Module boundaries enforced by story AC (`process.env` only in 1.2; `new WebApi` and `@azure-devops/mcp/dist/*` deep-imports only in Story 1.3 and each `src/tools/*.ts`).
+- ✅ Code shape discipline encoded in tool stories (2.1 AC explicitly verifies skill + support-tool registration).
 - ✅ Error-handling pattern (try/catch at boundary, raw message pass-through) present in every handler AC.
-- ✅ Logging discipline (stderr only, no `console.log`) in Story 1.4 AC.
+- ✅ Logging discipline (stderr only, no `console.log`) in Story 1.3 AC.
 
 ---
 
@@ -224,7 +244,7 @@ All four required planning artifacts (Brief, PRD, Architecture, Epics) are compl
 2. **Execute Epic 1 Story 1.1** (Project Scaffold) in a fresh Claude Code context window with Architecture and Epics as input. Estimated ~30 minutes.
 3. **Proceed story-by-story in epic order** (1.1 → 1.2 → 1.3 → 1.4 → 2.1 → … → 4.1). Each story is self-contained with testable AC.
 4. **Use MCP Inspector between stories** for interactive validation, especially after Epic 1 (verify auth works) and after each primitive in Epic 2/3 (verify MCP tools list and input/output).
-5. **Time-budget discipline:** 5-hour cap. If overrun likely at any checkpoint, apply the pre-committed scope cuts in priority order (drop `create_work_item` complexity → drop `/azdo-create-ticket` skill → drop secondary skills; keep sprint-report path load-bearing).
+5. **Time-budget discipline:** 5-hour cap. If overrun likely at any checkpoint, apply the pre-committed scope cuts in priority order: (a) drop Epic 3 Story 3.2 (link support), (b) drop Epic 3 Story 3.4 (MS core-tools bulk-wire for picker UX), (c) drop `/azdo-create-ticket` entirely, (d) drop secondary skills. The sprint-report path (`list_recent_iterations`, MS `wit_query_by_wiql` + `wit_get_work_items_batch_by_ids`, MS `wit_add_work_item_comment`, `/azdo-sprint-report`) is load-bearing and stays.
 
 ### Pre-Implementation Checklist (commit strategy)
 

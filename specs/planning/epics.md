@@ -55,7 +55,7 @@ This document provides the complete epic and story breakdown for AzDo MCP, decom
 
 **Ecosystem Integration (Microsoft Tool Inheritance)**
 - FR25: The system can expose Microsoft's `@azure-devops/mcp` tool set (work-items, work, wiki domains) alongside the author-defined primitives within a single MCP tool namespace.
-- FR26: When posting Markdown-formatted comments, the system can use Microsoft's pre-existing REST workaround (api-version `7.2-preview.4`) inherited via deep-import.
+- FR26: When posting Markdown-formatted comments, the system relies on MS's registered `wit_add_work_item_comment` tool (bulk-wired via `configureWorkItemTools` in Epic 1) — `format: "Markdown"` is a first-class parameter and MS handles the underlying api-version (`7.2-preview.4`) internally; no author-written raw-REST code.
 - FR27: When creating or updating wiki pages, the system can use Microsoft's pre-existing ETag-retry behavior inherited via deep-import.
 - FR28: The user can invoke either author-defined tools or Microsoft-provided tools from Claude without needing to know which source implements which capability.
 
@@ -69,7 +69,7 @@ This document provides the complete epic and story breakdown for AzDo MCP, decom
 
 **Performance**
 - NFR-P1: MCP server cold start < 2 seconds on Node 24 LTS.
-- NFR-P2: Single tool-call latency < 1.5 seconds at p95 for a one-ID work-item fetch (`wit_get_work_items_batch_by_ids` with a single ID) and `add_comment`.
+- NFR-P2: Single tool-call latency < 1.5 seconds at p95 for a one-ID work-item fetch (`wit_get_work_items_batch_by_ids` with a single ID) and `wit_add_work_item_comment`.
 - NFR-P3: Batch fetch of up to 50 work items in an iteration completes within 5 seconds; chunk above 200-ID AzDO limit.
 - NFR-P4: `/azdo-sprint-report` end-to-end completion under 2 minutes for a 25-item iteration.
 
@@ -81,7 +81,7 @@ This document provides the complete epic and story breakdown for AzDo MCP, decom
 - NFR-S5: No network requests beyond Azure DevOps API. No telemetry.
 
 **Integration**
-- NFR-I1: Azure DevOps Services REST API 7.1 (wiki) and 7.2-preview.4 (Markdown comments) via deep-imported helpers. AzDO Server on-premises not supported.
+- NFR-I1: Azure DevOps Services REST reached via `azure-devops-node-api` (author primitives) and MS-registered tools bulk-wired via `@azure-devops/mcp@2.6.0` (MS tools handle api-version selection internally — `7.2-preview.4` for Markdown comments is an MS implementation detail). AzDO Server on-premises not supported.
 - NFR-I2: MCP spec via `@modelcontextprotocol/sdk` v1.29+ over stdio.
 - NFR-I3: Invokable by Claude Code via standard `.mcp.json` entry; other MCP hosts not guaranteed.
 - NFR-I4: `@azure-devops/mcp@2.6.0` pinned exact; upgrades opt-in.
@@ -131,10 +131,10 @@ N/A — AzDo MCP has no UI. All user interaction is through Claude Code's chat i
 | FR5 filter by priority | Epic 2 | Skill builds WIQL with `[Microsoft.VSTS.Common.Priority] = N` → `wit_query_by_wiql` → batch |
 | FR6 WIQL query | Epic 2 | `wit_query_by_wiql` via skill (user's raw SELECT accepted verbatim) |
 | FR7 field subset | Epic 2 | `fields` param on `wit_get_work_items_batch_by_ids` |
-| FR8 create work item | Epic 3 | `create_work_item` primitive |
-| FR9 create with links | Epic 3 | `links` param |
-| FR10 post comment | Epic 3 | `add_comment` primitive |
-| FR11 Markdown format | Epic 3 | `format` param + raw-REST 7.2-preview.4 |
+| FR8 create work item | Epic 3 (Story 3.1) | MS `wit_create_work_item` via `/azdo-create-ticket` skill (baseline, no links) |
+| FR9 create with links | Epic 3 (Story 3.2) | MS `wit_work_items_link` via `/azdo-create-ticket` skill; multi-link batch + all-or-nothing pre-validation |
+| FR10 post comment | Epic 3 (Story 3.3) | MS `wit_add_work_item_comment` via `/azdo-add-comment` skill |
+| FR11 Markdown format | Epic 3 (Story 3.3) | MS `wit_add_work_item_comment` `format: "Markdown"` (default) |
 | FR12 list iterations | Epic 2 | `list_recent_iterations` primitive (author-owned; last N by start date) + MS `work_list_team_iterations` bulk-wired via `configureWorkTools` |
 | FR13 timeframe filter | Epic 2 | MS `work_list_team_iterations` `timeframe` param (inherited via `configureWorkTools`) |
 | FR14 iteration name→GUID | Epic 2 | Claude orchestrates via skill |
@@ -143,13 +143,13 @@ N/A — AzDo MCP has no UI. All user interaction is through Claude Code's chat i
 | FR17 multi-tool compound skill | Epic 2/3/4 | Skills orchestrate sequentially |
 | FR18 conversational param collection | Epic 2/3/4 | Each skill asks for missing inputs |
 | FR19 edit skill without rebuild | Epic 1 | Architecture enables; reinforced every epic |
-| FR20 ship 5 skills | Epic 2 (2), Epic 3 (2), Epic 4 (1) | Cumulative across three epics |
+| FR20 ship 5 skills | Epic 2 (1), Epic 3 (2), Epic 4 (1) | Cumulative across three epics (Epic 2 ships 1 unified fetch skill; Stories 2.4/2.5 collapsed into Story 2.1) |
 | FR21 `.env` config load | Epic 1 | `src/config.ts` + `--env-file` |
 | FR22 fail-fast on missing env | Epic 1 | Startup error pattern |
 | FR23 PAT auth | Epic 1 | `src/client.ts` + `getPersonalAccessTokenHandler` |
 | FR24 `.mcp.json` host entry | Epic 1 | `.claude/.mcp.json` committed |
 | FR25 MS tools in namespace (work-items domain only at MVP) | Epic 1 | `configureWorkItemTools` in `src/index.ts` — other MS domains (`configureWorkTools`, `configureWikiTools`) deferred to Phase 2 |
-| FR26 MD comment workaround | Epic 3 | Author-written raw-REST fetch in `add_comment` (api-version 7.2-preview.4) |
+| FR26 MD comment workaround | Epic 3 | Inherited via MS `wit_add_work_item_comment` (MS handles the 7.2-preview.4 call internally; no author code) |
 | FR27 wiki ETag workaround | — (deferred) | No wiki primitive in MVP; `configureWikiTools` wiring deferred to Phase 2 |
 | FR28 unified namespace | Epic 1 | Author tools + MS `wit_*` tools coexist in single namespace |
 | FR29 MCP spec compliance | Epic 1 | `@modelcontextprotocol/sdk` stdio transport |
@@ -182,13 +182,15 @@ Single-ticket, multi-ID, iteration-scoped, WIQL-raw, and shorthand-filter retrie
 
 **FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR12, FR13, FR14, FR16, FR17, FR18, FR20 (2 of 5 skills — `/azdo-fetch-ticket` and `/azdo-fetch-tickets` merged into a single skill)
 
-### Epic 3: Work Item Writes — Curated Mutation Layer
+### Epic 3: Work Item Writes — Skill-Based Mutation Layer
 
-**Goal:** Introduce author-controlled write primitives (`create_work_item`, `add_comment`) and two user-facing skills (`/azdo-create-ticket`, `/azdo-add-comment`). `add_comment` uses a custom raw-REST call to api-version `7.2-preview.4` for Markdown formatting (FR26). After this epic, the conversational ticket-composition use case (Journey 2) works end-to-end.
+**Goal:** Close the write path entirely at the skill layer, over Microsoft's inherited write tools. Ship two user-facing skills — `/azdo-create-ticket` and `/azdo-add-comment` — composed over MS's `wit_create_work_item`, `wit_work_items_link`, and `wit_add_work_item_comment`, plus one infrastructure story that bulk-wires MS core/team-listing tools for picker UX. No author-owned write primitives; MS's tools already cover the full planned surface, and Markdown comments (FR11/FR26) are handled natively by MS via the `format` parameter on `wit_add_work_item_comment` — the raw-REST workaround originally scoped in FR26 is obsolete. Every mutation skill in this epic obeys the project-wide [`mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md) rule: preview → edits loop → explicit approval → mutate. See [`specs/planning/research/skill-vs-primitive-write-path-2026-04-22.md`](research/skill-vs-primitive-write-path-2026-04-22.md) for the full primitive-abandonment rationale. After this epic, the conversational ticket-composition use case (Journey 2) works end-to-end.
 
-**User outcome:** *"I say 'pull feature 8812, draft a follow-up ticket extending the export pipeline, link as Related, create it' — one Claude turn, no browser tabs."*
+**Story shape:** 3.1 ships baseline `/azdo-create-ticket` (create only, no links); 3.2 extends that skill with multi-link support and all-or-nothing pre-create target validation; 3.3 ships `/azdo-add-comment`; 3.4 bulk-wires MS core/team-listing tools to enable picker UX in 3.1 and future skills.
 
-**FRs covered:** FR8, FR9, FR10, FR11, FR16, FR17, FR18, FR20 (2 more skills; cumulative 4 of 5), FR26
+**User outcome:** *"I say 'pull feature 8812, draft a follow-up ticket extending the export pipeline, link as Related, create it' — a short conversation with a preview I can iterate on, then one explicit go, no browser tabs, no surprises."*
+
+**FRs covered:** FR8 (Story 3.1), FR9 (Story 3.2), FR10 + FR11 + FR26 (Story 3.3), FR16, FR17, FR18, FR20 (2 more skills; cumulative 4 of 5 — unified Epic 2 skill + 2 Epic 3 skills)
 
 ### Epic 4: Sprint Report — Compound Orchestration
 
@@ -419,124 +421,183 @@ So that compound skills like `/azdo-sprint-report` can reference iterations dete
 
 Originally planned as separate `/azdo-fetch-ticket` (single) and `/azdo-fetch-tickets` (batch) skills. Both folded into a single unified `/azdo-fetch-tickets` skill under Story 2.1. Single-ticket retrieval is `wit_get_work_items_batch_by_ids({ ids: [N] })` — the same call the batch path uses. Two skills for one concept invited duplicate SKILL.md maintenance and ambiguous intent-matching. Merge preserves all FR coverage (FR16–FR18, FR20 — 2-of-5 skills, since `/azdo-fetch-ticket` no longer exists standalone; the unified skill still counts once).
 
-## Epic 3: Work Item Writes — Curated Mutation Layer
+## Epic 3: Work Item Writes — Skill-Based Mutation Layer
 
-Introduce author-controlled write primitives and two user-facing skills, closing the write-path. `add_comment` uses a custom raw-REST call to api-version `7.2-preview.4` for Markdown formatting.
+Close the write path at the skill layer, over Microsoft's inherited write tools. No author-owned write primitives — MS's `wit_create_work_item`, `wit_work_items_link`, and `wit_add_work_item_comment` cover the full planned surface, and `wit_add_work_item_comment` handles Markdown natively via its `format` parameter (the raw-REST 7.2-preview.4 workaround MS applied internally — it ships as a first-class enum on the tool). Full rationale in [`specs/planning/research/skill-vs-primitive-write-path-2026-04-22.md`](research/skill-vs-primitive-write-path-2026-04-22.md).
 
-### Story 3.1: `create_work_item` Primitive
+Every skill in this epic follows the project-wide [`mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md) rule: render a preview, accept explicit user approval or edits, loop until approved, only then mutate. Silence is not approval. Each story's ACs describe observable behavior; the detailed confirmation contract lives in the rule file.
 
-As Claude (via a skill),
-I want to create a new Azure DevOps work item with type, title, description, arbitrary field values, and optional typed links to existing work items,
-So that conversational ticket-composition skills can create real tickets end-to-end without the browser UI.
-
-**Acceptance Criteria:**
-
-**Given** `src/tools/work-items.ts` exports `registerWorkItemTools(server)` (already present after Story 2.1)
-**When** the server responds to `tools/list`
-**Then** a tool named `create_work_item` is present with an input schema accepting `project: string`, `type: string`, `title: string`, `description?: string`, `fields?: Record<string, unknown>`, `links?: Array<{ id: number, type: string }>`
-
-**Given** `create_work_item` is called with valid minimal parameters (`project`, `type`, `title`)
-**When** the handler executes
-**Then** the Azure DevOps REST `PATCH` add-operations payload is constructed correctly
-**And** the response contains the new work item's ID and URL
-
-**Given** `create_work_item` is called with `links: [{ id: 8812, type: "System.LinkTypes.Related" }]`
-**When** the handler executes
-**Then** the payload includes a relation add-operation for the specified link type
-**And** the created work item exhibits the link in its relations on re-fetch
-
-**Given** `create_work_item` is called with `fields: { "Microsoft.VSTS.Common.Priority": 2, "System.Tags": "backend; urgent" }`
-**When** the handler executes
-**Then** the payload includes add-operations for each custom field
-**And** the resulting work item reflects those values
-
-**Given** the work-item `type` does not exist in the target project
-**When** the handler executes
-**Then** the response contains `isError: true` with the raw error message from Azure DevOps
-
-### Story 3.2: `add_comment` Primitive with Markdown Support
-
-As Claude (via a skill),
-I want to post a Markdown-formatted comment to an Azure DevOps work item through a single tool call,
-So that compound skills can publish formatted output (sprint reports, follow-up notes) directly to tickets.
-
-**Acceptance Criteria:**
-
-**Given** `src/tools/comments.ts` exports `registerCommentTools(server)` and `addComment(api, params)`
-**When** the server responds to `tools/list`
-**Then** a tool `add_comment` is present with input schema `{ workItemId: number.int.positive(), comment: string, format?: "Markdown" | "Html" }`
-
-**Given** `add_comment` is called with default `format: "Markdown"`
-**When** the handler executes
-**Then** a raw `fetch` HTTPS `POST` is issued against `/_apis/wit/workItems/{id}/comments?format=0&api-version=7.2-preview.4`
-**And** the request body is `{ "text": "<comment>" }`
-**And** the request carries the same `Authorization: Basic` PAT header as the rest of the client
-**And** the response contains the new comment's ID
-
-**Given** `add_comment` is called with `format: "Html"`
-**When** the handler executes
-**Then** the `format` query parameter is `1`
-
-**Given** no `azure-devops-node-api` typed method is used for comment posting
-**When** the source of `addComment` is inspected
-**Then** it uses raw fetch against the versioned endpoint directly (matching Microsoft's own workaround pattern)
-
-**Given** the target work item ID does not exist
-**When** the handler executes
-**Then** the response contains `isError: true` with the raw 404 error body
-
-### Story 3.3: `/azdo-create-ticket` Claude Skill
+### Story 3.1: `/azdo-create-ticket` skill — baseline create (no links)
 
 As a Claude Code user,
-I want to describe a new ticket conversationally — optionally referencing existing tickets for context — and have Claude draft it, confirm with me, and create it in Azure DevOps,
-So that ticket composition becomes a single conversational turn rather than a browser expedition.
+I want to describe a new ticket conversationally — optionally referencing existing tickets for context — and have Claude draft it, iterate with me on edits, and create it in Azure DevOps on my explicit go,
+So that ticket composition becomes a short conversational exchange rather than a browser expedition, with no chance of the agent creating something I didn't approve.
 
 **Acceptance Criteria:**
+
+**Given** `src/tools/project-context.ts` already exports `registerProjectContextTools(server)` (from Story 2.1)
+**When** this story's changes are applied
+**Then** `get_project_context` is extended to also return `orgUrl: string` read from `config.orgUrl` (schema still zero-arg)
+**And** the response JSON is `{ project, team, orgUrl }` with `project`/`team` either the configured default or `null`, and `orgUrl` always a non-empty string (it is a required env var per NFR-S1)
 
 **Given** `.claude/skills/azdo-create-ticket/SKILL.md` exists
 **When** Claude Code starts
-**Then** `/azdo-create-ticket` is available as a slash-command
+**Then** `/azdo-create-ticket` is available as a slash-command with a one-line description matching "conversational ticket composition" intent
 
 **Given** the user invokes `/azdo-create-ticket pull feature 8812 and propose a follow-up`
 **When** Claude reads the SKILL.md steps
-**Then** Claude calls `wit_get_work_items_batch_by_ids({ ids: [8812], expand: "relations" })` to pull context
+**Then** Claude calls `wit_get_work_items_batch_by_ids({ ids: [8812], expand: "relations" })` for context
+**And** Claude calls `get_project_context` once to resolve `{ project, team, orgUrl }`
 **And** Claude drafts a title and Markdown description for the follow-up
-**And** Claude presents the draft inline and asks for confirmation before calling `create_work_item`
-**And** on user approval, Claude calls `create_work_item({ project, type, title, description, links: [{ id: 8812, type: "System.LinkTypes.Related" }] })`
-**And** Claude replies with the new ticket ID and its URL
+**And** Claude presents the full draft inline (work-item type, title, Markdown description, resolved project) and asks the user whether to create as-is or apply edits
+**And** if the user proposes edits, Claude applies them, re-renders the full draft, and waits again — looping until the user issues an explicit affirmative verb ("create", "go", "создавай", or equivalent)
+**And** only on explicit approval, Claude calls `wit_create_work_item({ project, workItemType, fields: [{ name: "System.Title", value: <title> }, { name: "System.Description", value: <markdown>, format: "Markdown" }, ...any extra fields the user requested] })`
+**And** Claude replies with the new ticket ID and its URL, constructed as `${orgUrl}/${project}/_workitems/edit/${id}` (the MS tool is not guaranteed to return a URL, so the skill always constructs one deterministically)
 
-**Given** the user invokes `/azdo-create-ticket` without context
+**Given** the user invokes `/azdo-create-ticket` with no initial context
 **When** Claude reads the SKILL.md
-**Then** Claude asks the user for the required inputs (project, work-item type, title, and optional description) before calling any tool
+**Then** Claude asks for at minimum `workItemType` and `title` before drafting, and does not fabricate placeholders
 
-**Given** `create_work_item` returns `isError: true`
+**Given** `get_project_context` returns `project: null` (no configured default) and the user's message did not name a project
+**When** Claude processes the response
+**Then** Claude asks the user for the project by name before any further step — no invented values, no guessing
+
+**Given** `get_project_context` returns `team: null` and the user's request does not require a team (a plain create-ticket usually doesn't — team is needed for iteration-scoped operations)
+**When** Claude proceeds
+**Then** Claude does not ask for `team` unnecessarily; team is only requested if a later step actually needs it
+
+**Given** `wit_create_work_item` returns `isError: true`
 **When** Claude reads the response
-**Then** Claude surfaces the error text to the user and does not claim success
+**Then** Claude surfaces the error text verbatim and does not claim success (per [`mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md) error handling)
 
-### Story 3.4: `/azdo-add-comment` Claude Skill
+**Given** the `mcp__azdo__*` prefixed tools are not in Claude's available tool list
+**When** the user invokes the skill
+**Then** the skill instructs Claude to tell the user the `azdo-mcp` MCP server is not connected and point them at `.claude/.mcp.json`, rather than attempt REST or any other backchannel
+
+**Out of scope for Story 3.1:** link support (relations to existing work items). That capability is Story 3.2 — it depends on a working baseline skill so link behavior can be verified independently.
+
+### Story 3.2: `/azdo-create-ticket` — link support
 
 As a Claude Code user,
-I want to post a Markdown comment to a work item conversationally,
-So that I can publish notes, status updates, or sprint reports directly from chat.
+I want my new ticket to be linked to one or more existing tickets with typed relationships (Parent, Child, Related, Tests, etc.) as part of the same conversational flow,
+So that the ticket I create lands fully wired into the backlog without a second manual step in the browser.
+
+**Acceptance Criteria:**
+
+**Given** Story 3.1 has shipped a working baseline `/azdo-create-ticket` skill
+**When** this story's changes are applied
+**Then** the same skill file gains link support; no new skill file is created
+
+**Given** the user's request contains one or more link intents (e.g. "link as Related to 8812", "parent is 8800, related to 8812 and 8901")
+**When** Claude parses the request
+**Then** Claude extracts a list of `{ linkToId, type }` pairs, mapping natural-language labels to MS's enum values (`parent`, `child`, `related`, `predecessor`, `successor`, `tests`, `tested by`, `affects`, `affected by`, `duplicate`, `duplicate of`)
+
+**Given** Claude has a non-empty list of proposed links
+**When** Claude proceeds with the preview step
+**Then** before drafting the ticket, Claude calls `wit_get_work_items_batch_by_ids({ ids: [<all target IDs>] })` once as a batch pre-validation
+**And** if *any* target ID does not resolve (missing from the response, or the call errors), Claude reports all invalid IDs to the user and asks for correction before creating anything — all-or-nothing: the ticket is never created if any link target is invalid
+
+**Given** all target IDs validated successfully
+**When** Claude renders the draft preview
+**Then** the preview includes a "Links" section listing each link as `{type} → #{linkToId} {title of target}` so the user can see exactly what will land before approving
+
+**Given** the user approves the draft
+**When** Claude creates the ticket
+**Then** Claude calls `wit_create_work_item(...)` as in Story 3.1
+**And** captures the new work-item ID from the response
+**And** issues a single `wit_work_items_link({ project, updates: [<all proposed links with id = newId>] })` call with the full batch of link updates
+
+**Given** `wit_create_work_item` succeeds but the subsequent `wit_work_items_link` call returns `isError: true`
+**When** Claude reads the link error
+**Then** Claude's reply names the created ticket (ID + constructed URL) AND the raw link error verbatim AND offers the user a choice: retry the link batch, retry a subset, or leave the ticket unlinked (per `mutation-confirmation.md` partial-failure honesty)
+**And** Claude does NOT attempt any retry automatically
+
+**Given** any tool call in this flow returns `isError: true` before the create step
+**When** Claude reads the error
+**Then** Claude surfaces it verbatim and stops — the ticket is not created (fail-fast before mutation)
+
+**Trade-off (recorded, non-blocking):** This flow is non-atomic on AzDO's side (create + link = two PATCH calls). An original author-written primitive could have issued a single atomic PATCH. The pre-create batch validation + all-or-nothing gate + partial-failure honesty gives us most of the practical benefit without the primitive. See the write-path research doc for the decision.
+
+### Story 3.3: `/azdo-add-comment` Claude Skill
+
+As a Claude Code user,
+I want to post a Markdown comment to a work item conversationally, with a preview I can iterate on before publishing,
+So that I can publish notes, status updates, or sprint reports directly from chat without accidentally posting a typo or a misformatted block visible to my teammates.
 
 **Acceptance Criteria:**
 
 **Given** `.claude/skills/azdo-add-comment/SKILL.md` exists
 **When** Claude Code starts
-**Then** `/azdo-add-comment` is available
+**Then** `/azdo-add-comment` is available as a slash-command with a one-line description matching "post a Markdown comment to a work item" intent
 
 **Given** the user invokes `/azdo-add-comment 4521 "Sprint closed, see you Monday."`
 **When** Claude reads the SKILL.md
-**Then** Claude calls `add_comment({ workItemId: 4521, comment: "Sprint closed, see you Monday.", format: "Markdown" })`
+**Then** Claude renders a preview showing the target work-item ID (optionally enriched with its title via a `wit_get_work_items_batch_by_ids` lookup for readability), the exact comment body as it will be stored, and the `format: "Markdown"` declaration
+**And** Claude waits for an explicit affirmative verb ("post", "publish", "ship it", "да", "публикуй", or equivalent); edits loop back to a fresh preview
+**And** on explicit approval, Claude calls `wit_add_work_item_comment({ workItemId: 4521, comment: <body>, format: "Markdown" })`
+**And** Claude does not pass `project` unless the user supplied one explicitly or a prior call this session returned a project-selection prompt
 **And** Claude replies confirming the comment was posted with the returned comment ID
 
 **Given** the user invokes `/azdo-add-comment` without a work-item ID or comment body
 **When** Claude reads the SKILL.md
-**Then** Claude asks for both before calling the tool
+**Then** Claude asks for the missing input(s) before any further step; no placeholders, no invented targets
 
-**Given** the user's comment body contains Markdown syntax (lists, links, bold)
-**When** the comment is posted and rendered in Azure DevOps
-**Then** the Markdown renders correctly (confirmed by manual UI check or by re-fetching the comment with its format metadata)
+**Given** the user's comment body, after trimming whitespace, is empty
+**When** Claude evaluates the input
+**Then** Claude refuses to post, asks the user for a non-empty comment body, and does NOT call `wit_add_work_item_comment` — the skill never lets an empty/whitespace-only comment reach Azure DevOps
+
+**Given** the user's comment body contains Markdown syntax (lists, links, bold, code fences)
+**When** the preview is rendered
+**Then** Claude shows the raw Markdown source AND notes that it will render as Markdown in the AzDO UI (so the user can catch formatting mistakes before posting)
+
+**Given** `wit_add_work_item_comment` returns `isError: true`
+**When** Claude reads the response
+**Then** Claude surfaces the error text verbatim and does not claim success
+
+**Given** the `mcp__azdo__*` prefixed tools are not in Claude's available tool list
+**When** the user invokes the skill
+**Then** the skill instructs Claude to tell the user the `azdo-mcp` MCP server is not connected and point them at `.claude/.mcp.json`, rather than attempt REST or any other backchannel
+
+### Story 3.4: Bulk-wire MS core/team-listing tools for picker UX
+
+As Claude (via a skill),
+I want to enumerate the Azure DevOps projects and teams available to the authenticated PAT — without reimplementing any MS capability — so that when a skill asks the user for a project or team (e.g. when `get_project_context` returns `null`), the user gets a picker rather than a free-text prompt,
+So that misspellings, ghost teams, and silent "project not found" errors are caught at the interaction layer, not at mutation time.
+
+**Acceptance Criteria:**
+
+**Given** `@azure-devops/mcp@2.6.0` is already pinned in `package.json` (Epic 1)
+**When** the developer inspects the installed package
+**Then** the audit documents whether `configureCoreTools` (or equivalent) exposes team/project enumeration tools such as `core_list_projects`, `core_list_teams` — results captured in a short note in `specs/dev/story-3.4-*.md`
+
+**Given** the audit confirms the relevant MS configure-function and tools exist
+**When** the server starts
+**Then** the new domain is bulk-wired via the shared `src/ms-providers.ts` helpers (same pattern as Story 2.3's `configureWorkTools`)
+**And** `src/index.ts` contains one new `configure<Domain>Tools(server, tokenProvider, clientProvider, userAgentProvider)` line
+**And** `tools/list` includes the newly inherited MS tools
+
+**Given** the audit finds no suitable MS tool for enumerating teams/projects
+**When** the story closes
+**Then** the conclusion is recorded in the dev notes, this story ships no runtime code, and a placeholder follow-up item is added to `specs/dev/deferred-work.md` (author-owned alternative) — the story is still closed, not blocked
+
+**Given** the MS tools are successfully wired
+**When** `/azdo-create-ticket` is invoked and `get_project_context` returns `{ project: null }`
+**Then** the skill MAY call the MS project-listing tool to offer the user a short picker of available projects (SKILL.md-level enhancement, not mandatory in this story — this story only delivers the tools; skills opt in as they are updated)
+
+**Out of scope for Story 3.4:** modifying `/azdo-create-ticket` SKILL.md to actually use the picker. That is a small follow-up edit once the tools are available and their shape is verified.
+
+---
+
+### Original Stories 3.1 and 3.2 — abandoned primitives (historical)
+
+The initial plan shipped two author-owned write primitives — `create_work_item` and `add_comment` (the latter with a raw-REST call to `api-version=7.2-preview.4` to compensate for MS's presumed lack of Markdown support). Schema inspection of the connected `azdo` MCP server on 2026-04-22 showed:
+
+- `wit_create_work_item` accepts a generic `fields` array with per-field `format: "Markdown" | "Html"` — covers FR8 and, together with `wit_work_items_link`, FR9.
+- `wit_add_work_item_comment` has a first-class `format` enum defaulting to `Markdown` — MS is already issuing the `7.2-preview.4` call internally. This closes FR26 without any author code.
+
+Both primitives would have been zero-marginal-capability diffs against MS's surface. Following the same reasoning established for the Epic 2 read path ([`specs/planning/research/skill-vs-primitive-read-path-2026-04-22.md`](research/skill-vs-primitive-read-path-2026-04-22.md)), they are abandoned. Full write-path rationale in [`specs/planning/research/skill-vs-primitive-write-path-2026-04-22.md`](research/skill-vs-primitive-write-path-2026-04-22.md).
+
+The `src/tools/comments.ts` file from Epic 1's scaffold is no longer needed and may be removed as an opportunistic cleanup; no FR depends on it after this epic.
 
 ## Epic 4: Sprint Report — Compound Orchestration
 
@@ -569,14 +630,14 @@ So that the weekly thirty-minute reporting chore becomes a ninety-second convers
 
 **Given** the user confirms and supplies a target ticket ID
 **When** Claude proceeds
-**Then** Claude calls `add_comment({ workItemId: <target>, comment: <markdown report>, format: "Markdown" })`
+**Then** Claude calls `wit_add_work_item_comment({ workItemId: <target>, comment: <markdown report>, format: "Markdown" })`
 **And** Claude replies with the target ticket URL and a brief confirmation
 
 **Given** the iteration contains zero work items
 **When** Claude executes the skill
-**Then** Claude reports "no work items in this iteration" and does not call `add_comment`
+**Then** Claude reports "no work items in this iteration" and does not call `wit_add_work_item_comment`
 
-**Given** `wit_query_by_wiql`, `wit_get_work_items_batch_by_ids`, or `add_comment` returns `isError: true`
+**Given** `wit_query_by_wiql`, `wit_get_work_items_batch_by_ids`, or `wit_add_work_item_comment` returns `isError: true`
 **When** Claude processes the response
 **Then** Claude surfaces the error and does not claim the report was posted
 
