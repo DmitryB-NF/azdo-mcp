@@ -9,7 +9,7 @@ Resolve the user's request to a set of work-item IDs, then fetch full fields in 
 
 ## Preconditions
 
-All tools below are registered on the `azdo` MCP server. Invoke them with the `mcp__azdo__` prefix — `wit_get_work_items_batch_by_ids` becomes `mcp__azdo__wit_get_work_items_batch_by_ids`, `get_project_context` becomes `mcp__azdo__get_project_context`. The bare names in this document are the tool IDs on the server.
+All tools below are registered on the `azdo` MCP server. Invoke them with the `mcp__azdo__` prefix — `wit_get_work_items_batch_by_ids` becomes `mcp__azdo__wit_get_work_items_batch_by_ids`, `get_azdo_context` becomes `mcp__azdo__get_azdo_context`. The bare names in this document are the tool IDs on the server.
 
 If the `mcp__azdo__*` tools are not in your available tool list, the server is not connected. **Follow `.claude/rules/azdo-mcp-connection.md`** — it pins the naming contract and the no-REST-fallback policy. Report the disconnected state to the user and stop; do not invent alternatives.
 
@@ -22,14 +22,13 @@ Two rules are not yours to bend — everything else is:
 
 ## Project context
 
-Most calls need `project`. Team-relative WIQL (`@CurrentIteration`, some iteration paths) also needs `team`.
+Most calls need `project`. Team-relative WIQL (`@CurrentIteration`, some iteration paths) also needs `team`. Rendering (see § Rendering → Ticket links) always needs `orgUrl`.
 
-- If the user named a project and/or team in this turn, use their values verbatim.
-- If coordinates aren't needed for the call you're about to make, skip the lookup.
-- Otherwise call `get_project_context` **once** and cache `{ project, team }` for the rest of the request.
-- If a required field comes back `null`, ask the user for just that field.
+- Call `get_azdo_context` **once per turn** and cache `{ project, team, orgUrl }` for both tool calls and rendering. `orgUrl` is always non-empty — safe for link construction in every path.
+- If the user named a project and/or team in their message, prefer their values over the defaults from `get_azdo_context`.
+- If a required field comes back `null` and the user didn't supply it, ask for just that field.
 
-Never call `get_project_context` twice per request. Never call it when the user already gave you what you need.
+Never call `get_azdo_context` twice per request.
 
 ## Building WIQL — your call
 
@@ -61,6 +60,19 @@ Make it readable and shaped to what the user asked for.
 
 - Single ticket → full body: title, state, priority, assignee, description, and a linked-items section if relations came back.
 - Multiple tickets → a grouped summary. Grouping by `System.State` and sorting by `Microsoft.VSTS.Common.Priority` ascending is a solid default when the user didn't specify an order.
+
+### Ticket links
+
+Every reference to a work item — the heading of a single-ticket render, each bullet in a multi-ticket list, any mention of a linked/related ID in the body — MUST be a full Markdown hyperlink:
+
+```
+[#<id>](<orgUrl>/<project>/_workitems/edit/<id>) — <type> — <title>
+```
+
+Never bare `#<id>`: chat UIs auto-link `#NNNNN` to GitHub issues and send the reader to the wrong service. The rule holds whether you fetched by ID or by WIQL, and whether or not `get_azdo_context` was already part of the call.
+
+- `orgUrl` comes from `get_azdo_context` — call it once per turn for orgUrl alone if you didn't already need it for a project lookup. Cost is one zero-arg round-trip; pay it.
+- `project` comes from each returned item's `System.TeamProject` field. Don't reuse a single cached project for the whole list — cross-project batches are legal and each link must target its own project slug.
 
 ## Errors and empty sets
 

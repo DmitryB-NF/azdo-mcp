@@ -1,6 +1,7 @@
 export default {
   orgUrl: requireEnv('AZDO_ORG_URL'),
   pat: requireEnv('AZDO_PAT'),
+  userEmail: process.env.AZDO_USER_EMAIL,
   defaultProject: process.env.AZDO_DEFAULT_PROJECT,
   defaultTeam: process.env.AZDO_DEFAULT_TEAM,
 };

@@ -174,7 +174,7 @@ N/A — AzDo MCP has no UI. All user interaction is through Claude Code's chat i
 
 ### Epic 2: Work Item Retrieval — Skill-Based Read Layer
 
-**Goal:** Solve the work-item retrieval pain entirely through a single Claude Skill (`/azdo-fetch-tickets`) composed over Microsoft's inherited `wit_*` tools. No author-owned read primitives are shipped — the WIQL-then-batch pattern is an AzDO-API reality, MS already covers both halves, and skill-layer composition (FR17) is the architecture's native extension point. The only author-owned tool added is `get_project_context`, a zero-arg lookup returning the configured AzDO project (and team) so the skill can build team-relative WIQL (e.g. `@CurrentIteration('[project]\team')`) without hardcoding.
+**Goal:** Solve the work-item retrieval pain entirely through a single Claude Skill (`/azdo-fetch-tickets`) composed over Microsoft's inherited `wit_*` tools. No author-owned read primitives are shipped — the WIQL-then-batch pattern is an AzDO-API reality, MS already covers both halves, and skill-layer composition (FR17) is the architecture's native extension point. The only author-owned tool added is `get_azdo_context`, a zero-arg lookup returning the configured AzDO project (and team) so the skill can build team-relative WIQL (e.g. `@CurrentIteration('[project]\team')`) without hardcoding.
 
 Single-ticket, multi-ID, iteration-scoped, WIQL-raw, and shorthand-filter retrieval all share one user-facing entry point. Originally-planned stories 2.2 (`list_work_items`), 2.4 (`/azdo-fetch-ticket`), and 2.5 (`/azdo-fetch-tickets` batch-only) are collapsed into Story 2.1's unified skill. See `specs/planning/research/skill-vs-primitive-read-path-2026-04-22.md` for the full rationale behind abandoning author read primitives.
 
@@ -308,11 +308,11 @@ So that Claude can fetch, query, and comment on real work items through MS-provi
 
 **Status:** Complete (2026-04-22) — Story 2.1 shipped in `4d0ca5f`; Story 2.3 shipped in `a972173` with a design pivot (see story note below); Stories 2.4 and 2.5 merged into 2.1.
 
-Solve the work-item retrieval pain through a single Claude Skill (`/azdo-fetch-tickets`) composed over Microsoft's inherited `wit_*` tools, plus one support tool (`get_project_context`) returning the configured AzDO project and team for team-relative WIQL.
+Solve the work-item retrieval pain through a single Claude Skill (`/azdo-fetch-tickets`) composed over Microsoft's inherited `wit_*` tools, plus one support tool (`get_azdo_context`) returning the configured AzDO project and team for team-relative WIQL.
 
 ### Story 2.1: Skill-based read path with project context
 
-**Replaces:** original Story 2.1 (`get_work_item`), original Story 2.2 (`list_work_items`), original Story 2.4 (`/azdo-fetch-ticket`), and original Story 2.5 (`/azdo-fetch-tickets` as a separate batch-only skill). All four collapsed into one story covering a unified `/azdo-fetch-tickets` skill plus the `get_project_context` support tool. Rationale in `specs/planning/research/skill-vs-primitive-read-path-2026-04-22.md`.
+**Replaces:** original Story 2.1 (`get_work_item`), original Story 2.2 (`list_work_items`), original Story 2.4 (`/azdo-fetch-ticket`), and original Story 2.5 (`/azdo-fetch-tickets` as a separate batch-only skill). All four collapsed into one story covering a unified `/azdo-fetch-tickets` skill plus the `get_azdo_context` support tool. Rationale in `specs/planning/research/skill-vs-primitive-read-path-2026-04-22.md`.
 
 As a Claude Code user,
 I want a single conversational entry point — `/azdo-fetch-tickets` — that fetches work items by any reasonable criterion (one or many IDs, current or named iteration, raw WIQL, or compound shorthand like "closed P1 last sprint") and renders the result as readable Markdown,
@@ -320,12 +320,12 @@ So that every work-item read in Azure DevOps becomes a single chat turn without 
 
 **Acceptance Criteria:**
 
-**Given** `src/tools/project-context.ts` exports `registerProjectContextTools(server)`, imported and called by `src/index.ts`
+**Given** `src/tools/azdo-context.ts` exports `registerAzdoContextTools(server)`, imported and called by `src/index.ts` (renamed from `src/tools/project-context.ts` / `registerProjectContextTools` during Story 3.1 when the payload grew beyond project scope — see that story's dev doc § Why rename)
 **When** the server responds to `tools/list`
-**Then** a tool `get_project_context` is present with an empty input schema and a zero-arg handler
-**And** `get_project_context` appears before any `wit_*` tool in the list (author layer registered first)
+**Then** a tool `get_azdo_context` is present with an empty input schema and a zero-arg handler
+**And** `get_azdo_context` appears before any `wit_*` tool in the list (author layer registered first)
 
-**Given** `get_project_context` is called
+**Given** `get_azdo_context` is called
 **When** the handler executes
 **Then** the response contains a single `text` content block with pretty-printed JSON `{ project, team }`
 **And** `project` is `config.defaultProject` or `null`; `team` is `config.defaultTeam` or `null`
@@ -337,7 +337,7 @@ So that every work-item read in Azure DevOps becomes a single chat turn without 
 
 **Given** the user invokes `/azdo-fetch-tickets 1234` (one numeric ID)
 **When** Claude reads the skill
-**Then** Claude calls `wit_get_work_items_batch_by_ids({ ids: [1234] })` directly — no `wit_query_by_wiql`, no `get_project_context`
+**Then** Claude calls `wit_get_work_items_batch_by_ids({ ids: [1234] })` directly — no `wit_query_by_wiql`, no `get_azdo_context`
 **And** Claude renders a single-ticket Markdown summary (title, state, priority, assignee, description, relations if returned)
 
 **Given** the user invokes `/azdo-fetch-tickets 1234 5678 9012` (multiple numeric IDs)
@@ -347,13 +347,13 @@ So that every work-item read in Azure DevOps becomes a single chat turn without 
 
 **Given** the user invokes `/azdo-fetch-tickets current sprint`
 **When** Claude reads the skill
-**Then** Claude calls `get_project_context` once, captures `{ project, team }`
+**Then** Claude calls `get_azdo_context` once, captures `{ project, team }`
 **And** Claude builds WIQL `SELECT [System.Id] FROM WorkItems WHERE [System.IterationPath] = @CurrentIteration('[<project>]\<team>')`
 **And** Claude calls `wit_query_by_wiql({ query, project })`, extracts IDs, then calls `wit_get_work_items_batch_by_ids({ ids, project })`
 
 **Given** the user invokes `/azdo-fetch-tickets closed P1 from last sprint`
 **When** Claude reads the skill
-**Then** Claude calls `get_project_context` once and composes one WIQL combining priority, closed-state clause, and `@CurrentIteration(...) - 1`, then runs query → batch
+**Then** Claude calls `get_azdo_context` once and composes one WIQL combining priority, closed-state clause, and `@CurrentIteration(...) - 1`, then runs query → batch
 
 **Given** the user invokes `/azdo-fetch-tickets` with a raw `SELECT …` query
 **When** Claude reads the skill
@@ -371,7 +371,7 @@ So that every work-item read in Azure DevOps becomes a single chat turn without 
 **When** Claude processes the empty result
 **Then** Claude replies "No matching work items." and stops
 
-**Given** `get_project_context` returns `null` for a field the current call actually needs
+**Given** `get_azdo_context` returns `null` for a field the current call actually needs
 **When** Claude reads the response
 **Then** Claude asks the user for just that field (project alone, or team alone) rather than inventing values
 
@@ -423,11 +423,15 @@ Originally planned as separate `/azdo-fetch-ticket` (single) and `/azdo-fetch-ti
 
 ## Epic 3: Work Item Writes — Skill-Based Mutation Layer
 
+**Status:** In progress (2026-04-23) — Stories 3.1 and 3.2 merged and shipped together; Stories 3.3 and 3.4 pending.
+
 Close the write path at the skill layer, over Microsoft's inherited write tools. No author-owned write primitives — MS's `wit_create_work_item`, `wit_work_items_link`, and `wit_add_work_item_comment` cover the full planned surface, and `wit_add_work_item_comment` handles Markdown natively via its `format` parameter (the raw-REST 7.2-preview.4 workaround MS applied internally — it ships as a first-class enum on the tool). Full rationale in [`specs/planning/research/skill-vs-primitive-write-path-2026-04-22.md`](research/skill-vs-primitive-write-path-2026-04-22.md).
 
 Every skill in this epic follows the project-wide [`mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md) rule: render a preview, accept explicit user approval or edits, loop until approved, only then mutate. Silence is not approval. Each story's ACs describe observable behavior; the detailed confirmation contract lives in the rule file.
 
 ### Story 3.1: `/azdo-create-ticket` skill — baseline create (no links)
+
+**Shipped merged with Story 3.2** — see Story 3.2 note below. Single commit, single SKILL.md with conditional link branching. Dev doc: [`specs/dev/story-3.1-3.2-azdo-create-ticket.md`](../dev/story-3.1-3.2-azdo-create-ticket.md).
 
 As a Claude Code user,
 I want to describe a new ticket conversationally — optionally referencing existing tickets for context — and have Claude draft it, iterate with me on edits, and create it in Azure DevOps on my explicit go,
@@ -435,10 +439,10 @@ So that ticket composition becomes a short conversational exchange rather than a
 
 **Acceptance Criteria:**
 
-**Given** `src/tools/project-context.ts` already exports `registerProjectContextTools(server)` (from Story 2.1)
+**Given** `src/tools/azdo-context.ts` exports `registerAzdoContextTools(server)` (extended in this story from Story 2.1's `get_project_context` — rename rationale in dev doc § Why rename)
 **When** this story's changes are applied
-**Then** `get_project_context` is extended to also return `orgUrl: string` read from `config.orgUrl` (schema still zero-arg)
-**And** the response JSON is `{ project, team, orgUrl }` with `project`/`team` either the configured default or `null`, and `orgUrl` always a non-empty string (it is a required env var per NFR-S1)
+**Then** `get_azdo_context` returns `{ project, team, orgUrl, user }` — `project`/`team` either the configured default or `null`; `orgUrl` always a non-empty string (required env `AZDO_ORG_URL`); `user.email` is the optional `AZDO_USER_EMAIL` value or `null`
+**And** the input schema stays zero-arg
 
 **Given** `.claude/skills/azdo-create-ticket/SKILL.md` exists
 **When** Claude Code starts
@@ -447,24 +451,34 @@ So that ticket composition becomes a short conversational exchange rather than a
 **Given** the user invokes `/azdo-create-ticket pull feature 8812 and propose a follow-up`
 **When** Claude reads the SKILL.md steps
 **Then** Claude calls `wit_get_work_items_batch_by_ids({ ids: [8812], expand: "relations" })` for context
-**And** Claude calls `get_project_context` once to resolve `{ project, team, orgUrl }`
-**And** Claude drafts a title and Markdown description for the follow-up
-**And** Claude presents the full draft inline (work-item type, title, Markdown description, resolved project) and asks the user whether to create as-is or apply edits
-**And** if the user proposes edits, Claude applies them, re-renders the full draft, and waits again — looping until the user issues an explicit affirmative verb ("create", "go", "создавай", or equivalent)
-**And** only on explicit approval, Claude calls `wit_create_work_item({ project, workItemType, fields: [{ name: "System.Title", value: <title> }, { name: "System.Description", value: <markdown>, format: "Markdown" }, ...any extra fields the user requested] })`
-**And** Claude replies with the new ticket ID and its URL, constructed as `${orgUrl}/${project}/_workitems/edit/${id}` (the MS tool is not guaranteed to return a URL, so the skill always constructs one deterministically)
+**And** Claude calls `get_azdo_context` once to resolve `{ project, team, orgUrl, user }`
+**And** Claude drafts a title (plain text, no Markdown syntax), a Markdown description, and Markdown acceptance criteria for the follow-up
+**And** Claude resolves `System.AreaPath` from the team's default via `work_get_team_settings({ project, team })` when the user didn't name an area verbatim — the skill never creates a ticket with a project-root default area, because that drops the ticket off every team's backlog
+**And** Claude presents the full draft inline — work-item type, title, resolved project, resolved area, assignee, priority, story points (when applicable), Markdown description, Markdown acceptance criteria, and any links — labeling each fill-in as `(default: …)` or `(suggested: … — rationale)` so the user sees at a glance what needs confirming
+**And** Claude asks the user whether to create as-is or apply edits
+**And** if the user proposes edits, Claude applies them, re-renders the full draft, and waits again — looping until the user issues an explicit affirmative verb ("create", "go", "ship it", "approved", or equivalent in the user's language)
+**And** only on explicit approval, Claude calls `wit_create_work_item({ project, workItemType, fields: [...] })` with `System.Title` carrying an explicit `format: "Html"` (other plain-string scalars carry no `format` attribute; prose fields carry `format: "Markdown"`)
+**And** Claude replies with the new ticket ID and its URL, constructed as `${orgUrl}/${project}/_workitems/edit/${id}` and rendered as a Markdown hyperlink `[#<id>](<url>)` to avoid chat-UI auto-linking `#<id>` to GitHub
 
 **Given** the user invokes `/azdo-create-ticket` with no initial context
 **When** Claude reads the SKILL.md
-**Then** Claude asks for at minimum `workItemType` and `title` before drafting, and does not fabricate placeholders
+**Then** Claude asks for at minimum `workItemType` and `title` before drafting, and does not fabricate placeholders; `System.Description` and `Microsoft.VSTS.Common.AcceptanceCriteria` are mandatory and drafted from the user's intent (never `TBD` / `n/a`); `System.AreaPath` is mandatory and resolved via the rule above; `Microsoft.VSTS.Common.Priority` is always surfaced in preview with a suggested value inferred from the draft (neutral default `2` when the draft has no signal)
 
-**Given** `get_project_context` returns `project: null` (no configured default) and the user's message did not name a project
+**Given** `get_azdo_context` returns `project: null` (no configured default) and the user's message did not name a project
 **When** Claude processes the response
 **Then** Claude asks the user for the project by name before any further step — no invented values, no guessing
 
-**Given** `get_project_context` returns `team: null` and the user's request does not require a team (a plain create-ticket usually doesn't — team is needed for iteration-scoped operations)
-**When** Claude proceeds
-**Then** Claude does not ask for `team` unnecessarily; team is only requested if a later step actually needs it
+**Given** `get_azdo_context` returns `team: null` and the user did not name a team or supply `System.AreaPath` verbatim
+**When** Claude proceeds to the area-path resolution step
+**Then** Claude asks the user for `team` before calling `work_get_team_settings` — the project-root default area is not an acceptable fallback because it produces orphan tickets off every team's backlog; the ask is required only when the skill actually needs the team to resolve area, not as a blanket prompt
+
+**Given** `user.email` is non-null
+**When** Claude drafts the preview
+**Then** `System.AssignedTo` is proposed in the preview as `(default: <email>)` — the user can accept silently, override with a named teammate, or drop the assignee; if the user drops it, the field is omitted from the `fields[]` payload entirely (not sent as empty string)
+
+**Given** `user.email` is null (the `AZDO_USER_EMAIL` env is unset)
+**When** Claude drafts the preview
+**Then** Claude asks once for an assignee email before drafting; if the user names someone, that becomes the assignee; if the user skips or says "unassigned", `System.AssignedTo` is omitted from the payload — preferred-but-not-forced
 
 **Given** `wit_create_work_item` returns `isError: true`
 **When** Claude reads the response
@@ -477,6 +491,8 @@ So that ticket composition becomes a short conversational exchange rather than a
 **Out of scope for Story 3.1:** link support (relations to existing work items). That capability is Story 3.2 — it depends on a working baseline skill so link behavior can be verified independently.
 
 ### Story 3.2: `/azdo-create-ticket` — link support
+
+**Shipped merged with Story 3.1** in a single commit. The story-shape separation (baseline then link) existed to make link behaviour verifiable independently, but both stories edit the same SKILL.md and link support is a conditional branch in the same preview → approve → mutate loop. Writing them as one unit avoids shipping a deliberate half-feature. Dev doc: [`specs/dev/story-3.1-3.2-azdo-create-ticket.md`](../dev/story-3.1-3.2-azdo-create-ticket.md).
 
 As a Claude Code user,
 I want my new ticket to be linked to one or more existing tickets with typed relationships (Parent, Child, Related, Tests, etc.) as part of the same conversational flow,
@@ -561,7 +577,7 @@ So that I can publish notes, status updates, or sprint reports directly from cha
 ### Story 3.4: Bulk-wire MS core/team-listing tools for picker UX
 
 As Claude (via a skill),
-I want to enumerate the Azure DevOps projects and teams available to the authenticated PAT — without reimplementing any MS capability — so that when a skill asks the user for a project or team (e.g. when `get_project_context` returns `null`), the user gets a picker rather than a free-text prompt,
+I want to enumerate the Azure DevOps projects and teams available to the authenticated PAT — without reimplementing any MS capability — so that when a skill asks the user for a project or team (e.g. when `get_azdo_context` returns `null`), the user gets a picker rather than a free-text prompt,
 So that misspellings, ghost teams, and silent "project not found" errors are caught at the interaction layer, not at mutation time.
 
 **Acceptance Criteria:**
@@ -581,7 +597,7 @@ So that misspellings, ghost teams, and silent "project not found" errors are cau
 **Then** the conclusion is recorded in the dev notes, this story ships no runtime code, and a placeholder follow-up item is added to `specs/dev/deferred-work.md` (author-owned alternative) — the story is still closed, not blocked
 
 **Given** the MS tools are successfully wired
-**When** `/azdo-create-ticket` is invoked and `get_project_context` returns `{ project: null }`
+**When** `/azdo-create-ticket` is invoked and `get_azdo_context` returns `{ project: null }`
 **Then** the skill MAY call the MS project-listing tool to offer the user a short picker of available projects (SKILL.md-level enhancement, not mandatory in this story — this story only delivers the tools; skills opt in as they are updated)
 
 **Out of scope for Story 3.4:** modifying `/azdo-create-ticket` SKILL.md to actually use the picker. That is a small follow-up edit once the tools are available and their shape is verified.
@@ -622,7 +638,7 @@ So that the weekly thirty-minute reporting chore becomes a ninety-second convers
 **Given** the user invokes `/azdo-sprint-report`
 **When** Claude reads the SKILL.md orchestration steps
 **Then** the steps instruct Claude to:
-- call `get_project_context` and build WIQL `SELECT [System.Id] FROM WorkItems WHERE [System.IterationPath] = @CurrentIteration('[<project>]\<team>')`
+- call `get_azdo_context` and build WIQL `SELECT [System.Id] FROM WorkItems WHERE [System.IterationPath] = @CurrentIteration('[<project>]\<team>')`
 - call `wit_query_by_wiql({ query, project })`, extract IDs, then call `wit_get_work_items_batch_by_ids({ ids, project, fields: ["System.Title", "System.State", "System.Description", "Microsoft.VSTS.Common.Priority"] })`
 - group returned items by `System.State` (Done / In Progress / other), sort each group by `Microsoft.VSTS.Common.Priority` ascending
 - render a Markdown report with a heading per state and one bullet per item (title + priority + one-line trimmed description)

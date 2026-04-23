@@ -6,7 +6,7 @@ Any skill that mutates Azure DevOps state — create, update, delete, comment, l
 
 Every mutation skill follows this loop:
 
-1. **Gather inputs.** Read the user's natural-language request. Use read-only MCP tools (`wit_get_work_items_batch_by_ids`, `get_project_context`, etc.) to fill gaps — never invent values, never call a mutating tool to "probe."
+1. **Gather inputs.** Read the user's natural-language request. Use read-only MCP tools (`wit_get_work_items_batch_by_ids`, `get_azdo_context`, etc.) to fill gaps — never invent values, never call a mutating tool to "probe."
 2. **Render a preview** of exactly what the mutation will do:
    - **Create** — drafted payload: work-item type, title, description (Markdown preview ok), project, every field value, every proposed link (source + target + type).
    - **Comment** — the exact comment body, the target work-item ID and title, the format (`Markdown` or `Html`).
