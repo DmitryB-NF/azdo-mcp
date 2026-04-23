@@ -2,6 +2,10 @@
 
 Findings from code reviews that are real but not actionable in the current story's scope. Each entry names the review it came from, the issue, and the reason for deferring.
 
+## Deferred from: story-3.3-azdo-add-comment (2026-04-23)
+
+- **Comment-formatting skill or skill update.** `/azdo-add-comment` currently delegates content-shape guidance to `.claude/rules/azdo-comment-style.md` (soft recommendations + two strict safety items) and does light Markdown normalisation inside the preview step. If real usage shows that style inconsistency or heavy reformatting needs (templated status updates, team-specific preambles, auto-expanded reference blocks) become recurring pain, either extend `/azdo-add-comment` with a formatting mode or spin up a dedicated `/azdo-format-comment` skill that takes raw notes and produces a styled body. Defer reason: current shape is intentionally light and opinion-free; revisit with live usage data rather than pre-optimising.
+
 ## Deferred from: code review of story-3.1-3.2-azdo-create-ticket (2026-04-23)
 
 - **Cross-project link-target validation missing.** Skill pre-validates link targets via `wit_get_work_items_batch_by_ids({ ids, project })` scoped to the create's project. AzDO returns items by ID org-wide, so a target from a different project resolves fine but the subsequent `wit_work_items_link` call may fail or create a semantically wrong link. No `target.System.TeamProject == project` check. Defer reason: uncommon flow; Story 3.2 scope is single-project link batches; add when a real cross-project request surfaces.
