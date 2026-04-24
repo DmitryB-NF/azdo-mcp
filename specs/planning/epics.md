@@ -143,7 +143,7 @@ N/A — AzDo MCP has no UI. All user interaction is through Claude Code's chat i
 | FR17 multi-tool compound skill | Epic 2/3/4 | Skills orchestrate sequentially |
 | FR18 conversational param collection | Epic 2/3/4 | Each skill asks for missing inputs |
 | FR19 edit skill without rebuild | Epic 1 | Architecture enables; reinforced every epic |
-| FR20 ship 5 skills | Epic 2 (1), Epic 3 (2), Epic 4 (1) | 4 skills cumulative — `/azdo-fetch-tickets`, `/azdo-create-ticket`, `/azdo-add-comment`, `/azdo-sprint-report`. Original targets `/azdo-fetch-ticket` + `/azdo-fetch-tickets` collapsed in Story 2.1. FR20 under-delivers on count by one; all functional coverage (FR10/11/16/17/18/26) is intact. |
+| FR20 ship 5 skills | Epic 2 (1), Epic 3 (2), Epic 4 (1) | 4 skills cumulative — `/azdo-fetch-tickets`, `/azdo-create-ticket`, `/azdo-add-comment`, `/azdo-sprint-report`. Original targets `/azdo-fetch-ticket` + `/azdo-fetch-tickets` collapsed in Story 2.1. FR20 under-delivers on count by one; all functional coverage (FR10/11/16/17/18/26) is intact. Project-wide writing-quality rule ([`writing-quality.md`](../../.claude/rules/writing-quality.md), shipped with Story 4.2) floors every generated artefact in British English. Sprint-goal ingestion (`get_sprint_goal`, Story 4.1) is the author-owned primitive unlocking `/azdo-sprint-report`'s narrative grounding. |
 | FR21 `.env` config load | Epic 1 | `src/config.ts` + `--env-file` |
 | FR22 fail-fast on missing env | Epic 1 | Startup error pattern |
 | FR23 PAT auth | Epic 1 | `src/client.ts` + `getPersonalAccessTokenHandler` |
@@ -186,7 +186,7 @@ Single-ticket, multi-ID, iteration-scoped, WIQL-raw, and shorthand-filter retrie
 
 **Goal:** Close the write path entirely at the skill layer, over Microsoft's inherited write tools. Ship two user-facing skills — `/azdo-create-ticket` and `/azdo-add-comment` — composed over MS's `wit_create_work_item`, `wit_work_items_link`, and `wit_add_work_item_comment`, plus one infrastructure story that bulk-wires MS core/team-listing tools for picker UX. No author-owned write primitives; MS's tools already cover the full planned surface, and Markdown comments (FR11/FR26) are handled natively by MS via the `format` parameter on `wit_add_work_item_comment` — the raw-REST workaround originally scoped in FR26 is obsolete. Every mutation skill in this epic obeys the project-wide [`mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md) rule: preview → edits loop → explicit approval → mutate. See [`specs/planning/research/skill-vs-primitive-write-path-2026-04-22.md`](research/skill-vs-primitive-write-path-2026-04-22.md) for the full primitive-abandonment rationale. After this epic, the conversational ticket-composition use case (Journey 2) works end-to-end.
 
-**Story shape (as shipped):** 3.1+3.2 merged into a single `/azdo-create-ticket` skill with optional link branching (commit `a10d8bd`, 2026-04-23). 3.3 ships `/azdo-add-comment` plus project-wide [`azdo-comment-style.md`](../../.claude/rules/azdo-comment-style.md) — the skill owns input/output contract and deep-link return; the rule owns content shape and is shared with `/azdo-sprint-report` and any future comment-posting path. 3.4 deferred — picker UX has no in-diff consumer at MVP; wiring is a one-line addition when Phase 2 needs it.
+**Story shape (as shipped):** 3.1+3.2 merged into a single `/azdo-create-ticket` skill with optional link branching (commit `a10d8bd`, 2026-04-23). 3.3 ships `/azdo-add-comment` plus project-wide [`azdo-comment-style.md`](../../.claude/rules/azdo-comment-style.md) — the skill owns input/output contract and deep-link return; the rule owns Markdown hygiene and ticket-reference conventions for every comment body (including `/azdo-sprint-report` in Story 4.1). 3.4 deferred — picker UX has no in-diff consumer at MVP; wiring is a one-line addition when Phase 2 needs it.
 
 **User outcome:** *"I say 'pull feature 8812, draft a follow-up ticket extending the export pipeline, link as Related, create it' — a short conversation with a preview I can iterate on, then one explicit go, no browser tabs, no surprises."* Journey 2 lands end-to-end through `/azdo-create-ticket`; `/azdo-add-comment` adds the complementary "post a note and get a deep link to it" flow.
 
@@ -194,9 +194,11 @@ Single-ticket, multi-ID, iteration-scoped, WIQL-raw, and shorthand-filter retrie
 
 ### Epic 4: Sprint Report — Compound Orchestration
 
-**Goal:** The flagship compound skill `/azdo-sprint-report` orchestrates reads (Epic 2) plus writes (Epic 3) to generate a Markdown report from an iteration and publish it as a comment on a target work item. Demonstrates the full primitives-plus-skills architecture in its most demanding form. Completes the five-skill MVP roster. **Publish target at MVP: work-item comment. Wiki-page publishing is deferred to Phase 2 (requires wiki-primitive or MS wiki-tool wiring).**
+**Goal:** The flagship compound skill `/azdo-sprint-report` orchestrates reads (Epic 2) plus writes (Epic 3) to generate a stakeholder-facing **narrative Markdown report** from the previous and current iterations and publish it as a comment on a target work item. Demonstrates the full primitives-plus-skills architecture in its most demanding form. Completes the five-skill MVP roster. **Publish target at MVP: work-item comment. Wiki-page publishing is deferred to Phase 2 (requires wiki-primitive or MS wiki-tool wiring).**
 
-**User outcome:** *"End of sprint: one command → Markdown report published as a comment on the epic. The 30-minute weekly chore becomes 90 seconds."*
+**Story shape (as shipped):** 4.1 ships the author-owned `get_sprint_goal` primitive that reads sprint goals (title, details, `goalAchieved`) from the `keesschollaart/sprint-goal` marketplace extension's Extension Data store — unlocked by the research documented in [`specs/planning/research/sprint-goal-extension-data-api-2026-04-24.md`](research/sprint-goal-extension-data-api-2026-04-24.md). 4.2 ships `/azdo-sprint-report` as a two-section narrative report (Achievements of the Last Sprint / Goals for the Current Sprint) — continuous prose only, no ticket IDs, no bullets, written for non-engineer stakeholders. The skill consumes `list_recent_iterations` (Story 2.3), `get_sprint_goal` (Story 4.1), `wit_query_by_wiql`, `wit_get_work_items_batch_by_ids`, and `wit_add_work_item_comment`. Target work-item ID resolution: user-named → otherwise ask. Goal resolution: user-supplied → `get_sprint_goal` → ask. Markdown hygiene, ticket-reference conventions, and the three safety items come from the general [`azdo-comment-style.md`](../../.claude/rules/azdo-comment-style.md); the skill adds the narrative content structure on top.
+
+**User outcome:** *"End of sprint: one command → narrative stakeholder report published as a comment on the reporting ticket. The 30-minute weekly chore becomes 90 seconds."*
 
 **FRs covered:** FR16, FR17, FR18, FR20 (final skill; 5 of 5), plus reuse of all Epic 2 and Epic 3 capabilities through skill orchestration
 
@@ -600,11 +602,57 @@ The `src/tools/comments.ts` file from Epic 1's scaffold is no longer needed and 
 
 The flagship compound skill that orchestrates reads plus writes to generate a Markdown report from an iteration and publish it as a comment on a target work item. Publish target at MVP: work-item comment only. Wiki-page publishing is deferred.
 
-### Story 4.1: `/azdo-sprint-report` Claude Skill
+**Order revision (2026-04-24).** The original Epic 4 plan shipped as a single story — the narrative skill. During implementation, empirical research ([`specs/planning/research/sprint-goal-extension-data-api-2026-04-24.md`](research/sprint-goal-extension-data-api-2026-04-24.md)) confirmed that sprint goals can be read directly from the `keesschollaart/sprint-goal` marketplace extension's Extension Data store. The skill's content depends on those goals, so the primitive was promoted to **Story 4.1** and the narrative skill renumbered to **Story 4.2**. The dependency now reads cleanly: the tool lands first, the consumer follows.
+
+### Story 4.1: `get_sprint_goal` author tool (extension-data ingestion)
+
+As a Claude Code user whose team already populates sprint goals in the `keesschollaart/sprint-goal` AzDO marketplace extension,
+I want a single server-side tool that returns the current sprint goal (title, details, achievement status) for any iteration,
+So that compound skills like `/azdo-sprint-report` can ground their narrative in team-authored goals instead of asking me at every invocation.
+
+**Research:** [`specs/planning/research/sprint-goal-extension-data-api-2026-04-24.md`](research/sprint-goal-extension-data-api-2026-04-24.md) — full investigation, endpoint contract, operational requirements.
+
+**Acceptance Criteria:**
+
+**Given** `src/tools/iterations.ts` registers `get_sprint_goal`
+**When** Claude Code starts the MCP server
+**Then** `mcp__azdo__get_sprint_goal` is available in the tool palette
+
+**Given** the input schema
+**When** it is inspected
+**Then** it requires `project: string`, `team: string`, `iterationId: string` — no optional parameters
+
+**Given** a call with a team name (not a GUID)
+**When** the tool runs
+**Then** the team is resolved to its GUID via `CoreApi.getTeam(project, team)` before the key is constructed; a team passed as a GUID skips the resolution round-trip
+
+**Given** a valid `{ project, team, iterationId }` where the extension has a stored goal
+**When** the tool fetches the document at `${extmgmtBase}/_apis/ExtensionManagement/InstalledExtensions/keesschollaart/sprint-goal/Data/Scopes/Default/Current/Collections/%24settings/Documents/sprintConfig.${iterationId[0:15]}${teamId[0:15]}?api-version=7.1-preview.1`
+**Then** it returns the stored `value` object (including `goal`, `details`, `detailsPlain`, `goalAchieved`) as JSON
+
+**Given** the document does not exist, the extension is not installed, or the PAT lacks `vso.extension.data`
+**When** the tool runs
+**Then** it returns the literal JSON `null` and does **not** set `isError: true`
+
+**Given** any other error (network failure, upstream 500, auth broken entirely)
+**When** the tool runs
+**Then** it returns `{ isError: true, content: [{ type: "text", text: "Error: <verbatim message>" }] }` per project pattern
+
+**Given** an `AZDO_ORG_URL` with or without a trailing slash
+**When** the tool constructs the extmgmt URL
+**Then** the resulting URL has no double-slash in the path
+
+**Given** the tool runs on a stock Node 24 setup with the repo's tsconfig
+**When** `pnpm type-check` runs
+**Then** the file compiles without errors or new warnings
+
+### Story 4.2: `/azdo-sprint-report` Claude Skill (narrative report)
 
 As a Claude Code user,
-I want to type `/azdo-sprint-report` at the end of a sprint and have Claude assemble a Markdown report from the iteration's work items — grouped by state, sorted by priority — and publish it as a comment on a target work item I specify,
-So that the weekly thirty-minute reporting chore becomes a ninety-second conversational exchange.
+I want to type `/azdo-sprint-report`, have Claude assemble a narrative stakeholder-facing Markdown report from the previous and current iterations — two sections in continuous prose, no ticket IDs, no bullets, grounded in each iteration's actual sprint goal when available — and publish it as a comment on a work item I specify,
+So that the weekly thirty-minute reporting chore becomes a ninety-second conversational exchange and the posted comment is immediately readable by non-engineers.
+
+**Depends on:** Story 4.1 (`get_sprint_goal`).
 
 **Acceptance Criteria:**
 
@@ -614,31 +662,45 @@ So that the weekly thirty-minute reporting chore becomes a ninety-second convers
 
 **Given** the SKILL.md front matter
 **When** it is parsed
-**Then** `name` is `azdo-sprint-report` and `description` is a one-line statement matching "end-of-sprint markdown report" intent
+**Then** `name` is `azdo-sprint-report` and `description` names the narrative "sprint report / sprint summary / stakeholder update" intent
 
 **Given** the user invokes `/azdo-sprint-report`
 **When** Claude reads the SKILL.md orchestration steps
 **Then** the steps instruct Claude to:
-- call `get_azdo_context` and build WIQL `SELECT [System.Id] FROM WorkItems WHERE [System.IterationPath] = @CurrentIteration('[<project>]\<team>')`
-- call `wit_query_by_wiql({ query, project })`, extract IDs, then call `wit_get_work_items_batch_by_ids({ ids, project, fields: ["System.Title", "System.State", "System.Description", "Microsoft.VSTS.Common.Priority"] })`
-- group returned items by `System.State` (Done / In Progress / other), sort each group by `Microsoft.VSTS.Common.Priority` ascending
-- render a Markdown report with a heading per state and one bullet per item (title + priority + one-line trimmed description)
-- prompt the user to confirm the report and provide a target work-item ID for publishing
+- call `get_azdo_context` once and cache `{ project, team, orgUrl }`
+- call `list_recent_iterations({ project, team, limit: 2 })` to obtain the previous and current iterations (name + path + start/finish dates)
+- call `get_sprint_goal` once per iteration to fetch the stored goal and `goalAchieved` state; `null` responses fall back to asking the user for the current goal and omitting any goal-centric narrative for the previous sprint
+- build one WIQL `SELECT [System.Id] FROM WorkItems WHERE [System.IterationPath] = '<path>'` per iteration and call `wit_query_by_wiql({ query, project })` for each
+- call `wit_get_work_items_batch_by_ids` **once**, combining IDs from both iterations, with fields `["System.Id", "System.Title", "System.State", "System.Description", "System.Tags", "Microsoft.VSTS.Common.Priority"]`
+- resolve `targetWorkItemId`: user-named in the message → otherwise ask the user once (never invent)
+- identify two to three real themes from the fetched goal + tickets (no generic categories)
+- produce a report with **exactly** two H2 sections — `## Achievements of the Last Sprint: <previousName>` and `## Goals for the Current Sprint: <currentName>` — three paragraphs each, continuous prose, two to three sentences per paragraph, no ticket IDs, no bullets
+- when the previous iteration's `goalAchieved` is known, open the Achievements section with that outcome as the lead sentence
+- validate the draft against [`writing-quality.md`](../../.claude/rules/writing-quality.md) (British English, no code-switching, no typos, well-formed Markdown) **before** showing the preview
+- render the preview inline (not in a code fence) with the target ticket meta line and the "post as-is or change?" follow-up, per [`mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md)
 
-**Given** the user confirms and supplies a target ticket ID
+**Given** the user approves with an explicit affirmative verb
 **When** Claude proceeds
-**Then** Claude calls `wit_add_work_item_comment({ workItemId: <target>, comment: <markdown report>, format: "Markdown" })`
-**And** Claude replies with the target ticket URL and a brief confirmation
+**Then** Claude calls `wit_add_work_item_comment({ workItemId: <target>, comment: <report>, format: "Markdown", project })` — `format` always explicit
+**And** Claude replies with a deep link `${orgUrl}/${project}/_workitems/edit/${targetWorkItemId}?focusedCommentId=${commentId}` constructed from `{ orgUrl, project, targetWorkItemId, commentId }`, Markdown-linked
 
-**Given** the iteration contains zero work items
+**Given** both iterations contain zero work items
 **When** Claude executes the skill
-**Then** Claude reports "no work items in this iteration" and does not call `wit_add_work_item_comment`
+**Then** Claude reports "no work items found in either iteration" and does not call `wit_add_work_item_comment`
 
-**Given** `wit_query_by_wiql`, `wit_get_work_items_batch_by_ids`, or `wit_add_work_item_comment` returns `isError: true`
+**Given** `list_recent_iterations` returns fewer than two iterations
+**When** Claude executes the skill
+**Then** Claude surfaces the situation (zero → stop; one → ask whether to generate a current-only report) rather than silently posting a half-report
+
+**Given** `get_sprint_goal` returns `null` for either iteration
+**When** Claude proceeds
+**Then** Claude never hard-errors; for the current iteration it falls back to asking the user once, for the previous iteration it proceeds from ticket themes alone without inventing a stated goal
+
+**Given** `list_recent_iterations`, `wit_query_by_wiql`, `wit_get_work_items_batch_by_ids`, or `wit_add_work_item_comment` returns `isError: true`
 **When** Claude processes the response
-**Then** Claude surfaces the error and does not claim the report was posted
+**Then** Claude surfaces the error verbatim and does not claim the report was posted
 
-**Given** the SKILL.md is edited (e.g., to change the grouping logic or the report template wording)
+**Given** the SKILL.md is edited (e.g., to change the section wording, theme-mapping hints, or anti-patterns)
 **When** Claude Code starts a new session
 **Then** the next invocation of `/azdo-sprint-report` reflects the edits without any source rebuild
 

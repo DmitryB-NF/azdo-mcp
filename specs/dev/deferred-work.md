@@ -2,6 +2,14 @@
 
 Findings from code reviews that are real but not actionable in the current story's scope. Each entry names the review it came from, the issue, and the reason for deferring.
 
+## Deferred from: story-4.2-azdo-sprint-report (2026-04-24)
+
+- **Env-configured default target work item.** `/azdo-sprint-report` currently resolves `targetWorkItemId` from the user's message or asks once. Teams that always post the report to the same work item (e.g. a standing reporting epic) would benefit from an `AZDO_SPRINT_REPORT_TARGET_ID` env fallback so the skill only asks when it cannot find a default. Defer reason: `process.env` reads are reserved for `src/config.ts` per the architecture boundary, and plumbing a default through `get_azdo_context` is a runtime-code change outside Story 4.2's skill+rule scope. Small follow-up: extend `config.ts` with `sprintReportTargetId`, extend `get_azdo_context`'s response shape, update the skill's resolution sequence.
+
+## Resolved from: story-4.1 (2026-04-24)
+
+- **Configured source for sprint goals** — *resolved by Story 4.1*. Previously flagged as needing a pinned-ticket convention or similar. Story 4.1's `get_sprint_goal` tool reads goals directly from the `keesschollaart/sprint-goal` marketplace extension's Extension Data store (research: `specs/planning/research/sprint-goal-extension-data-api-2026-04-24.md`). The skill now consumes that tool with graceful `null`-fallback. No further action needed.
+
 ## Deferred from: story-3.3-azdo-add-comment (2026-04-23)
 
 - **Comment-formatting skill or skill update.** `/azdo-add-comment` currently delegates content-shape guidance to `.claude/rules/azdo-comment-style.md` (soft recommendations + two strict safety items) and does light Markdown normalisation inside the preview step. If real usage shows that style inconsistency or heavy reformatting needs (templated status updates, team-specific preambles, auto-expanded reference blocks) become recurring pain, either extend `/azdo-add-comment` with a formatting mode or spin up a dedicated `/azdo-format-comment` skill that takes raw notes and produces a styled body. Defer reason: current shape is intentionally light and opinion-free; revisit with live usage data rather than pre-optimising.
