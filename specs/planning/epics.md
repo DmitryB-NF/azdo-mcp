@@ -662,19 +662,24 @@ So that the weekly thirty-minute reporting chore becomes a ninety-second convers
 - call `get_azdo_context` once and cache `{ project, team, orgUrl }`
 - call `list_recent_iterations({ project, team, limit: 2 })` to obtain the previous and current iterations (name + path + start/finish dates)
 - call `get_sprint_goal` once per iteration to fetch the stored goal and `goalAchieved` state; `null` responses fall back to asking the user for the current goal and omitting any goal-centric narrative for the previous sprint
-- build one WIQL `SELECT [System.Id] FROM WorkItems WHERE [System.IterationPath] = '<path>'` per iteration and call `wit_query_by_wiql({ query, project })` for each
+- call `wit_get_work_items_for_iteration({ project, team, iterationId })` once per iteration — natively team-scoped, so the response contains only tickets the given team has subscribed to in that iteration. Do **not** use `wit_query_by_wiql` with a WHERE clause on `IterationPath`: that path is project-scoped and bleeds in tickets from every team sharing it
 - call `wit_get_work_items_batch_by_ids` **once**, combining IDs from both iterations, with fields `["System.Id", "System.Title", "System.State", "System.Description", "System.Tags", "Microsoft.VSTS.Common.Priority"]`
-- resolve `targetWorkItemId`: user-named in the message → otherwise ask the user once (never invent)
 - identify two to three real themes from the fetched goal + tickets (no generic categories)
 - produce a report with **exactly** two H2 sections — `## Achievements of the Last Sprint: <previousName>` and `## Goals for the Current Sprint: <currentName>` — three paragraphs each, continuous prose, two to three sentences per paragraph, no ticket IDs, no bullets
+- lead each paragraph with the business outcome / value, not a ticket enumeration; prioritise paragraphs by alignment to the sprint goal when one is available, with paragraph 3 framed as wider improvements alongside the main thrust
 - when the previous iteration's `goalAchieved` is known, open the Achievements section with that outcome as the lead sentence
 - validate the draft against [`writing-quality.md`](../../.claude/rules/writing-quality.md) (British English, no code-switching, no typos, well-formed Markdown) **before** showing the preview
-- render the preview inline (not in a code fence) with the target ticket meta line and the "post as-is or change?" follow-up, per [`mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md)
+- render the preview inline (not in a code fence), per [`mutation-confirmation.md`](../../.claude/rules/mutation-confirmation.md), with a short meta line (Sprints + Format) and a "happy with the content, or change?" follow-up — no target-work-item reference, because publishing is decided post-preview
+- after content is approved, ask whether to publish and where: user supplies a work-item ID to post as a comment, or says "skip" to keep the report in chat only
 
-**Given** the user approves with an explicit affirmative verb
-**When** Claude proceeds
-**Then** Claude calls `wit_add_work_item_comment({ workItemId: <target>, comment: <report>, format: "Markdown", project })` — `format` always explicit
+**Given** the user approves the content and supplies a target work-item ID (either in the initial invocation or at the post-preview ask)
+**When** Claude proceeds to publish
+**Then** Claude enriches the target via `wit_get_work_items_batch_by_ids({ ids: [<target>], project })` once for the title, shows a mutation preview naming the target, waits for a second explicit affirmative verb, then calls `wit_add_work_item_comment({ workItemId: <target>, comment: <report>, format: "Markdown", project })` — `format` always explicit
 **And** Claude replies with a deep link `${orgUrl}/${project}/_workitems/edit/${targetWorkItemId}?focusedCommentId=${commentId}` constructed from `{ orgUrl, project, targetWorkItemId, commentId }`, Markdown-linked
+
+**Given** the user approves the content but says "skip" (or equivalent) at the publish prompt
+**When** Claude proceeds
+**Then** no `wit_add_work_item_comment` call is made; Claude replies with a short confirmation that the report is ready in the chat above for copy-and-reuse; no deep link is constructed
 
 **Given** either iteration returns an empty ticket set (previous, current, or both)
 **When** Claude executes the skill
@@ -688,7 +693,7 @@ So that the weekly thirty-minute reporting chore becomes a ninety-second convers
 **When** Claude proceeds
 **Then** Claude never hard-errors; for the current iteration it falls back to asking the user once, for the previous iteration it proceeds from ticket themes alone without inventing a stated goal
 
-**Given** `list_recent_iterations`, `wit_query_by_wiql`, `wit_get_work_items_batch_by_ids`, or `wit_add_work_item_comment` returns `isError: true`
+**Given** `list_recent_iterations`, `wit_get_work_items_for_iteration`, `wit_get_work_items_batch_by_ids`, or `wit_add_work_item_comment` returns `isError: true`
 **When** Claude processes the response
 **Then** Claude surfaces the error verbatim and does not claim the report was posted
 

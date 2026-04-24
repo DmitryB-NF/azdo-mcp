@@ -54,18 +54,22 @@ Alternative designs considered and rejected:
 - `get_azdo_context` (author, shipped in Epic 2) — project/team/orgUrl resolution.
 - `list_recent_iterations` (author, shipped in Story 2.3) — two most-recent iterations for the team. Called with `limit: 2`.
 - `get_sprint_goal` (author, shipped in Story 4.1) — sprint goal + details + achievement status for each iteration. One call per iteration.
-- `wit_query_by_wiql` (MS, bulk-wired in Epic 1) — one call per iteration for ID extraction.
+- `wit_get_work_items_for_iteration` (MS, bulk-wired in Epic 1) — natively team-scoped; one call per iteration returns the work items that team has subscribed to in that iteration. Replaced the earlier WIQL-over-IterationPath approach, which bled in tickets from other teams sharing the same path.
 - `wit_get_work_items_batch_by_ids` (MS) — **one** combined batch call across both iterations, plus an optional separate enrichment call for the target work item's title.
 - `wit_add_work_item_comment` (MS) — the single mutation; `format: "Markdown"` passed explicitly.
 
 No new `configure*Tools` registration. No new author runtime code in this story (the `get_sprint_goal` primitive lands in Story 4.1).
 
-## Target-ID resolution
+## Publishing is optional and always post-preview
 
-1. **User-named in the invocation.** "post to 8812", "target 7410", "on the Q2 reporting epic". Direct.
-2. **Ask once.** "Which work item should I post the report on?" Never invent.
+The skill's primary deliverable is the narrative report. Publishing that report as a comment on a work item is a separate, optional step that only runs if the user asks for it. The flow is:
 
-An env-configured default target (`AZDO_SPRINT_REPORT_TARGET_ID` or similar) was considered and deferred: `process.env` reads are architecturally reserved for `src/config.ts`, and routing a default through `get_azdo_context` would touch runtime code beyond this story's skill + rule scope. Flagged in `specs/dev/deferred-work.md` for a follow-up.
+1. Generate and preview the report (§§ 1–7 of the skill's call sequence) without needing a target work item.
+2. After the user approves the content, § 8 asks where — if anywhere — to publish: a work-item ID to post as a comment, or "skip" to keep the report in chat only.
+3. If a target is given, enrich its title via one `wit_get_work_items_batch_by_ids` call, show a mutation preview per `mutation-confirmation.md`, and post on a second explicit affirmative verb.
+4. If the user skips, no mutation runs; the report remains in chat for copy-and-reuse.
+
+An initial-message mention ("post to 8812") is remembered as a candidate target and reused at § 8 so the user isn't asked twice — but the mutation still requires its own approval verb. An env-configured default target (`AZDO_SPRINT_REPORT_TARGET_ID` or similar) was considered and deferred: `process.env` reads are architecturally reserved for `src/config.ts`, and routing a default through `get_azdo_context` would touch runtime code beyond this story's skill + rule scope. Flagged in `specs/dev/deferred-work.md` for a follow-up.
 
 ## Sprint-goal ingestion (via Story 4.1 tool)
 
@@ -109,20 +113,22 @@ Construct `commentUrl = ${orgUrl}/${project}/_workitems/edit/${targetWorkItemId}
 | `.claude/skills/azdo-sprint-report/SKILL.md` exists with correct front-matter | File inspection; skill appears in tool palette as `/azdo-sprint-report` |
 | `.claude/rules/writing-quality.md` exists and is auto-loaded | Session start; rule content shows up in system-reminder alongside other rules |
 | `.claude/rules/azdo-comment-style.md` applies to `/azdo-sprint-report`'s body without conflict after the simplification | File inspection; scope block lists `/azdo-sprint-report` alongside `/azdo-add-comment`; "prefer" items are compatible with the skill's narrative hard rules |
-| Target-ID resolution (user-named → ask) is honoured | Two live sessions: (a) ID in message, (b) no ID → skill asks once |
+| Publishing is optional and always post-preview: the report is generated without needing a target; only after content is approved does the skill ask where — if anywhere — to publish | Three live sessions: (a) ID in initial message → reused at the publish prompt, (b) no ID → publish prompt asks, user supplies ID, confirms at mutation preview, post happens, (c) no ID → publish prompt asks, user says "skip" → no mutation, report stays in chat |
+| Content approval is a separate gate from publish approval — a single affirmative verb at the content preview never triggers `wit_add_work_item_comment` | Live session: after content preview, say "ship it"; verify the skill proceeds to the publish question and renders a mutation preview before any post happens |
+| Paragraphs lead with outcome / business value, not ticket enumeration; priority order matches sprint-goal alignment | Preview inspection against an iteration with a known goal; verify paragraph 1 opens with the goal outcome and paragraph 3 is framed as "wider improvements alongside" |
 | Skill resolves sprint goals via precedence: user-supplied → `get_sprint_goal` → ask | Three live sessions: (a) goals in message, (b) extension returns non-null, (c) extension returns null → skill asks |
 | `list_recent_iterations` called with `limit: 2`, exactly once per invocation | Tool-call transcript inspection |
 | `get_sprint_goal` called exactly once per iteration after `list_recent_iterations` | Tool-call transcript inspection |
 | `get_sprint_goal` returning `null` never hard-errors the skill — falls back to ask-user / ticket-only narrative | Live session with non-existent iteration or extension uninstalled |
 | `goalAchieved: true/false` from previous iteration is reflected in the Achievements paragraph lead | Live session with each outcome available in test data |
-| One WIQL call per iteration + one combined batch call for tickets | Tool-call transcript inspection |
+| One `wit_get_work_items_for_iteration` call per iteration + one combined batch call for tickets | Tool-call transcript inspection |
 | Report body has exactly two H2 sections with the configured section titles and three paragraphs each | Preview inspection against a 5+ ticket iteration |
 | Report body contains no ticket IDs, no ticket titles, no bullets | Preview inspection; grep the preview text for `#\d` and `^-` |
 | British English validation runs before the preview is shown | Feed a Russian prompt; verify no Russian bleed-through in the preview |
 | `format: "Markdown"` is always passed explicitly to `wit_add_work_item_comment` | Tool-call payload inspection |
 | On success, reply contains the deep link `?focusedCommentId=<id>` as a Markdown hyperlink | Post a live test report; click through |
 | Fewer than two iterations returned → stop and ask the user to supply the missing iteration explicitly | Mock / test-team with zero or one iteration |
-| Either iteration returns an empty ticket set → stop before drafting, name the empty iteration, ask the user to correct / confirm / abort | WIQL returns empty for one or both iterations; verify skill asks rather than synthesising a paragraph |
+| Either iteration returns an empty ticket set → stop before drafting, name the empty iteration, ask the user to correct / confirm / abort | `wit_get_work_items_for_iteration` returns empty `workItemRelations` for one or both iterations; verify skill asks rather than synthesising a paragraph |
 | The skill never silently ships a half-report or an "empty-sprint" synthesised paragraph | Negative test — force the degenerate cases above and verify the skill always asks |
 | On any `isError: true`, raw error surfaced verbatim, no claim of success | Malformed body, then missing project, then garbage target ID |
 | `mcp__azdo__*` tools absent → skill reports disconnected per `azdo-mcp-connection.md`; no REST fallback | Session with MCP server off |
@@ -156,7 +162,8 @@ Already landed in `docs(Epic 4)` and not touched again here:
 - **Agent:** Amelia (`bmad-agent-dev`)
 - **Date:** 2026-04-24
 - **Notes:**
-  - Starting draft of the skill came from a previous-project artefact. Rewritten against this repo's conventions: real MCP tools (`list_recent_iterations`, `wit_query_by_wiql`, `wit_get_work_items_batch_by_ids`, `wit_add_work_item_comment`), mutation-confirmation preview/approve loop, deep-link reply shape, and target-ID precedence.
+  - Starting draft of the skill came from a previous-project artefact. Rewritten against this repo's conventions: real MCP tools (`list_recent_iterations`, `wit_get_work_items_for_iteration`, `wit_get_work_items_batch_by_ids`, `wit_add_work_item_comment`), mutation-confirmation preview/approve loop, deep-link reply shape, and target-ID precedence.
+  - **Post-ship fix (2026-04-24):** first e2e run caught a team-scoping bug in the original `wit_query_by_wiql` + `WHERE [System.IterationPath] = '<path>'` approach — IterationPath is project-scoped, so the WIQL returned tickets from every team subscribed to the iteration. Replaced `wit_query_by_wiql` with `wit_get_work_items_for_iteration({ project, team, iterationId })`, which wraps a natively team-scoped AzDO endpoint and does not need area-path juggling. See `fix(Story 4.2): team-scope ticket fetch via wit_get_work_items_for_iteration`.
   - Content shape for the report was originally proposed as an `azdo-sprint-report-style.md` rule. Per user direction, collapsed into the skill itself because the shape is single-consumer and splitting would force a round-trip to the rule file on every invocation for a document no other skill produces.
   - British English validation was originally coupled to the skill. Per user direction, lifted into a project-wide `writing-quality.md` rule — commits, code comments, tickets, reports, and docs all inherit the same floor.
   - The old Story 4.1 AC (bullet-per-item, grouped by state, sorted by priority) is obsoleted in `epics.md` rather than kept. Same pattern used for Stories 3.1–3.3 when shipped reality diverged from original plan.
