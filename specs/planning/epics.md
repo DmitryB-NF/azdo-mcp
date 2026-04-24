@@ -676,13 +676,13 @@ So that the weekly thirty-minute reporting chore becomes a ninety-second convers
 **Then** Claude calls `wit_add_work_item_comment({ workItemId: <target>, comment: <report>, format: "Markdown", project })` — `format` always explicit
 **And** Claude replies with a deep link `${orgUrl}/${project}/_workitems/edit/${targetWorkItemId}?focusedCommentId=${commentId}` constructed from `{ orgUrl, project, targetWorkItemId, commentId }`, Markdown-linked
 
-**Given** both iterations contain zero work items
+**Given** either iteration returns an empty ticket set (previous, current, or both)
 **When** Claude executes the skill
-**Then** Claude reports "no work items found in either iteration" and does not call `wit_add_work_item_comment`
+**Then** Claude stops before drafting, names which iteration came back empty, and asks the user how to proceed (supply a different iteration GUID/name, proceed with an explicit acknowledgement of the empty sprint, or abort) — never silently ships a half-report with a synthesised empty-sprint paragraph
 
 **Given** `list_recent_iterations` returns fewer than two iterations
 **When** Claude executes the skill
-**Then** Claude surfaces the situation (zero → stop; one → ask whether to generate a current-only report) rather than silently posting a half-report
+**Then** Claude stops, reports how many iterations were found (and which), and asks the user to supply the missing iteration explicitly or abort — the report requires both iterations, and a current-only half-report is never offered as an implicit fallback
 
 **Given** `get_sprint_goal` returns `null` for either iteration
 **When** Claude proceeds

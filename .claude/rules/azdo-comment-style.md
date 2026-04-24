@@ -1,8 +1,8 @@
 # AzDo Comment Style
 
-Recommendations (not mandates) for shaping comment bodies posted to Azure DevOps work items. Authors have their own voice; the guidance below makes comments easier to scan without flattening style. Two things **are** strict, because they are safety/UX contracts rather than style: empty-body refusal, and the preview-source-not-rendered reminder. Everything else is "prefer when useful".
+Recommendations (not mandates) for shaping comment bodies posted to Azure DevOps work items. Authors keep their voice; the guidance below covers Markdown hygiene, ticket references, and how to emphasise what matters — nothing else. Three items **are** strict, because they are safety / rendering contracts rather than style: empty-body refusal, preview-rendered, and Markdown-normalisation before preview. Everything else is "prefer when useful".
 
-Composes on top of [`mutation-confirmation.md`](mutation-confirmation.md), which handles preview/approve/edits mechanics. This rule is about content inside the body.
+Composes on top of [`writing-quality.md`](writing-quality.md) (British English, no code-switching, no typos, well-formed Markdown) and [`mutation-confirmation.md`](mutation-confirmation.md) (preview/approve/edits mechanics). This rule is about Markdown shape and reference conventions inside the body.
 
 ## Strict
 
@@ -14,12 +14,12 @@ Composes on top of [`mutation-confirmation.md`](mutation-confirmation.md), which
 
 Take or leave any of these depending on the comment's intent and your voice:
 
-- **Lead with the signal.** Comments are easier to skim when the first sentence carries the status or outcome (`Shipped — feature is in main.`, `Blocked on X — awaiting Y.`, `Decision: keep behaviour A, drop B.`). Salutations and sign-offs are usually unnecessary — this is a comment thread, not email — though a short greeting is fine when the comment opens a new conversation.
-- **A bold anchor for the key verb or status** when it helps scanning (`**Blocked**`, `**Decision:**`, `**Action:**`, `**FYI:**`). One anchor is usually enough; a paragraph peppered with bold loses its emphasis.
 - **Short paragraphs.** The AzDO comment panel is narrow, so long paragraphs wrap into unreadable blocks. One idea per paragraph, blank line between, often reads better than a single wall.
 - **Bullets for enumerations.** Follow-ups, affected items, decisions made, pending questions — each on its own `- ` bullet. Bullets are for lists; don't use them to add rhythm to prose.
 - **Blockquotes for prior context.** When continuing a thread and quoting the ticket description, a previous comment, or a referenced decision, `> ` visually separates quoted material from new content.
 - **Inline code and code fences for identifiers.** Field names (``` `System.State` ```, ``` `Microsoft.VSTS.Common.Priority` ```), file paths, shell commands, configuration keys, enumerated values (`"Active"`, `"Closed"`). Inline for a single token; fenced block for multiple lines.
+- **Bold for genuine emphasis.** A sparing `**word**` highlights the one thing the reader must not miss. A paragraph peppered with bold loses its emphasis; keep it rare.
+- **Headings for long comments only.** Short comments don't need `##` headings — paragraph structure already carries them. Use `##` / `###` only when a comment spans multiple distinct sections (a structured report, a multi-topic update) and the reader benefits from jumping.
 
 ## Ticket references
 
@@ -37,7 +37,9 @@ Applies to every path that calls `mcp__azdo__wit_add_work_item_comment`:
 
 - direct agent invocation from a user message,
 - `/azdo-add-comment` skill,
-- `/azdo-sprint-report` publishing its Markdown report,
+- `/azdo-sprint-report` skill,
 - any future skill that posts comments.
+
+Skill-specific **content structure** (what sections a report has, what paragraphs cover, what the skill's voice is) lives inside the skill that owns it. This rule's "prefer" items are compatible with any structure a skill prescribes — they are formatting hygiene, not content templates.
 
 Read-only paths (`wit_list_work_item_comments`) are outside scope.
