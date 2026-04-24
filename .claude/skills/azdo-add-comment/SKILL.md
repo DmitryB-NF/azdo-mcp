@@ -24,15 +24,16 @@ On success the skill replies in free natural language, tuned to the moment, with
 
 Build the link as `${orgUrl}/${project}/_workitems/edit/${workItemId}?focusedCommentId=${commentId}` from `{ orgUrl, project, workItemId, commentId }` — never use the MS tool's response `url`, which is a REST API URL, not a UI link. Embed it as a Markdown hyperlink in the confirmation. How the link is phrased ("posted — jump to it", "done, see [the comment](...)", etc.) is up to the moment; only the link itself is mandatory. No rigid template.
 
-## Preconditions
+## Applicable rules
 
-All tools below are registered on the `azdo` MCP server. Invoke them with the `mcp__azdo__` prefix — `wit_add_work_item_comment` becomes `mcp__azdo__wit_add_work_item_comment`. The bare names in this document are the tool IDs on the server.
+This skill composes on top of the repo-wide rules and does not restate them:
 
-If the `mcp__azdo__*` tools are not in your available tool list, the server is not connected. **Follow `.claude/rules/azdo-mcp-connection.md`** — report the disconnected state to the user and stop; no REST fallback.
+- [`azdo-mcp-connection.md`](../../rules/azdo-mcp-connection.md) — `mcp__azdo__` prefix, disconnected-state handling, no REST fallback.
+- [`mutation-confirmation.md`](../../rules/mutation-confirmation.md) — preview, edit loop, explicit-verb gate before any mutation.
+- [`azdo-comment-style.md`](../../rules/azdo-comment-style.md) — Markdown hygiene, body shape, empty-body refusal, explicit `format` parameter.
+- [`writing-quality.md`](../../rules/writing-quality.md) — British English re-read before the preview is shown.
 
-## Contract
-
-This skill writes to Azure DevOps. It obeys `.claude/rules/mutation-confirmation.md` (preview → edits loop → explicit affirmative verb → mutate) and `.claude/rules/azdo-comment-style.md` (body shape, empty-body refusal, preview-source-not-rendered reminder).
+Bare tool names below (`wit_add_work_item_comment`, `wit_get_work_items_batch_by_ids`, `get_azdo_context`) are server IDs; invoke with the `mcp__azdo__` prefix. If `mcp__azdo__*` tools are missing, the server isn't connected — report and stop.
 
 ## Call sequence
 
@@ -54,12 +55,7 @@ Trim the body. If it is empty or whitespace-only, refuse per `azdo-comment-style
 
 ### 4. Normalize and preview
 
-First, **clean up the body** as a helpful editor, not as a style-enforcer:
-
-- Fix obvious Markdown typos (unclosed `**bold**`, broken `[link](url)` syntax, mismatched list markers, orphan code-fence lines, inconsistent bullet indentation).
-- Collapse accidental extra whitespace; normalise blank-line separation between paragraphs.
-- Respect the user's voice — do not rewrite phrasing, trim meaning, or impose the soft recommendations from `.claude/rules/azdo-comment-style.md`. Those are suggestions for the user, not a license for the skill to editorialise.
-- If a cleanup changed the body in a way the user might care about (more than whitespace normalisation), note it briefly — e.g. "Fixed an unclosed bold tag near 'blocked on X'."
+Normalise the body per `azdo-comment-style.md § Strict` (fix obvious Markdown typos, clean accidental whitespace). Do **not** rewrite phrasing, trim meaning, or impose the "prefer" recommendations — those are suggestions for the user, not a licence for the skill to editorialise. If the cleanup changed the body in a way the user might care about (more than whitespace normalisation), note it briefly before the preview — e.g. "Fixed an unclosed bold tag near 'blocked on X'."
 
 Then render the preview inline. The preview shows the body **as it will render** (chat UIs render Markdown the same way AzDO does), so the user sees the final look directly:
 
@@ -115,11 +111,9 @@ Reply with the confirmation line and both links in Markdown, as shown in § Outp
 - `wit_get_work_items_batch_by_ids` fails during enrichment (§ 2) → report and stop before preview; the mutation never fires.
 - User changed target ID mid-edit → re-run § 2 enrichment before re-rendering preview.
 
-## Never
+## Skill-specific don'ts
 
-- Never call `wit_add_work_item_comment` without an explicit affirmative verb from the user in *this* invocation.
+General discipline — explicit-verb gate before any mutation, explicit `format` parameter, empty-body refusal, no REST fallback — lives in the topic rules. Only the comment-specific constraints belong here:
+
 - Never invent a `workItemId`.
 - Never scrape the reply URLs from MS's response — always construct them from `{ orgUrl, project, workItemId, commentId }`.
-- Never rely on MS's schema default for `format` — pass it explicitly.
-- Never post an empty-after-trim body, regardless of how the user insists.
-- Never fall back to REST, `curl`, `fetch`, or any non-MCP path to AzDO.

@@ -7,11 +7,11 @@ description: Fetch one or many Azure DevOps work items — by ID(s), by iteratio
 
 Resolve the user's request to a set of work-item IDs, then fetch full fields in one batch call and render.
 
-## Preconditions
+## Applicable rules
 
-All tools below are registered on the `azdo` MCP server. Invoke them with the `mcp__azdo__` prefix — `wit_get_work_items_batch_by_ids` becomes `mcp__azdo__wit_get_work_items_batch_by_ids`, `get_azdo_context` becomes `mcp__azdo__get_azdo_context`. The bare names in this document are the tool IDs on the server.
+- [`azdo-mcp-connection.md`](../../rules/azdo-mcp-connection.md) — `mcp__azdo__` prefix on every tool call, disconnected-state handling, no REST fallback.
 
-If the `mcp__azdo__*` tools are not in your available tool list, the server is not connected. **Follow `.claude/rules/azdo-mcp-connection.md`** — it pins the naming contract and the no-REST-fallback policy. Report the disconnected state to the user and stop; do not invent alternatives.
+Bare tool names below (`wit_query_by_wiql`, `wit_get_work_items_batch_by_ids`, `get_azdo_context`) are server IDs; invoke with the `mcp__azdo__` prefix. If `mcp__azdo__*` tools are missing, the server isn't connected — report and stop.
 
 ## Invariants the AzDO API forces
 

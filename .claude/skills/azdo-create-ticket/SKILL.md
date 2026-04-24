@@ -7,22 +7,17 @@ description: Draft and create a new Azure DevOps work item — Bug, Task, User S
 
 Turn a short conversational request into an approved Azure DevOps work-item create — optionally pre-wired with typed links — in a single turn. No browser. No guesses. No unapproved mutations.
 
-## Preconditions
+## Applicable rules
 
-All tools below are registered on the `azdo` MCP server. Invoke them with the `mcp__azdo__` prefix — `wit_create_work_item` becomes `mcp__azdo__wit_create_work_item`, `get_azdo_context` becomes `mcp__azdo__get_azdo_context`, and so on. The bare names in this document are the tool IDs on the server.
+This skill composes on top of the repo-wide rules and does not restate them:
 
-If the `mcp__azdo__*` tools are not in your available tool list, the server is not connected. **Follow `.claude/rules/azdo-mcp-connection.md`** — it pins the naming contract and the no-REST-fallback policy. Report the disconnected state to the user and stop; do not invent alternatives.
+- [`azdo-mcp-connection.md`](../../rules/azdo-mcp-connection.md) — `mcp__azdo__` prefix, disconnected-state handling, no REST fallback.
+- [`mutation-confirmation.md`](../../rules/mutation-confirmation.md) — preview, edit loop, explicit-verb gate before the create, honest partial-failure reporting.
+- [`writing-quality.md`](../../rules/writing-quality.md) — British English re-read of every drafted field before the preview is shown.
 
-## The non-negotiable contract
+Bare tool names below (`wit_create_work_item`, `wit_work_items_link`, `wit_get_work_items_batch_by_ids`, `work_get_team_settings`, `get_azdo_context`) are server IDs; invoke with the `mcp__azdo__` prefix. If `mcp__azdo__*` tools are missing, the server isn't connected — report and stop.
 
-This skill writes to Azure DevOps. Every invocation MUST obey `.claude/rules/mutation-confirmation.md`:
-
-1. Gather inputs (user message + optional read-only lookups).
-2. Render a **full preview** of the pending mutation.
-3. Loop on edits — each edit re-renders the full preview.
-4. Mutate **only on explicit affirmative verb** from the user ("create", "go", "ship it", "approved", or equivalent in the user's language). Silence is not approval. "Looks good." alone is not approval — it is acknowledgement, not an instruction. A negated affirmative is a refusal, not an approval: "don't create", "не создавай", "hold off", "not yet" — even though they contain affirmative verbs, they mean stop. Pattern-match on intent, not on substring. If in doubt, ask.
-
-Partial failure is reported honestly — see § Partial failure.
+Skill-specific partial-failure shape (post-create link failure) is covered in § Partial failure below.
 
 ## Call sequence
 
@@ -205,10 +200,10 @@ Any `isError: true` before the create call — context-read, pre-validation, res
 
 Exception: a resolvable error that clearly names its fix (e.g. a typo in a field name the user can correct) may be re-tried after the user confirms the correction — same preview → approve cycle.
 
-## Never
+## Skill-specific don'ts
 
-- Never call `wit_create_work_item` or `wit_work_items_link` without an explicit affirmative verb from the user in *this* invocation.
+General discipline — explicit-verb gate before any mutation, no REST fallback — lives in the topic rules. Only the create-specific constraints belong here:
+
 - Never invent a project, type, title, field value, or link target.
 - Never scrape the ticket URL from MS's response — always construct it from `{ orgUrl, project, id }`.
 - Never silently retry a failed link batch — ask the user.
-- Never fall back to REST, `curl`, `fetch`, or any non-MCP path to AzDO.
