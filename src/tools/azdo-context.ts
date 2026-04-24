@@ -14,7 +14,7 @@ export function registerAzdoContextTools(server: McpServer): void {
       const payload = {
         project: config.defaultProject ?? null,
         team: config.defaultTeam ?? null,
-        orgUrl: config.orgUrl,
+        orgUrl: `${config.api}/${config.org}`,
         user: { email: config.userEmail ?? null },
       };
       return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }] };

@@ -5,6 +5,6 @@ import config from './config';
 let client: WebApi | undefined;
 
 export function getClient(): WebApi {
-  client ??= new WebApi(config.orgUrl, getPersonalAccessTokenHandler(config.pat));
+  client ??= new WebApi(`${config.api}/${config.org}`, getPersonalAccessTokenHandler(config.pat));
   return client;
 }

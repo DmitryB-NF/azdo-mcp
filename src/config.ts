@@ -1,5 +1,8 @@
 export default {
-  orgUrl: requireEnv('AZDO_ORG_URL'),
+  api: 'https://dev.azure.com',
+  extmgmtApi: 'https://extmgmt.dev.azure.com',
+  extmgmtApiVersion: '7.1-preview.1',
+  org: requireEnv('AZDO_ORG'),
   pat: requireEnv('AZDO_PAT'),
   userEmail: process.env.AZDO_USER_EMAIL,
   defaultProject: process.env.AZDO_DEFAULT_PROJECT,

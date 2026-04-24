@@ -620,27 +620,19 @@ So that compound skills like `/azdo-sprint-report` can ground their narrative in
 
 **Given** the input schema
 **When** it is inspected
-**Then** it requires `project: string`, `team: string`, `iterationId: string` — no optional parameters
+**Then** it requires `team` and `iterationId`, both validated by a zod GUID regex (`/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`). No `project` parameter — the ExtensionData endpoint is org-scoped, not project-scoped. Non-GUID input (names, partial IDs, crafted strings with path separators) is rejected at the zod boundary before any URL is constructed — no name-to-GUID resolution, no URL-path injection surface.
 
-**Given** a call with a team name (not a GUID)
-**When** the tool runs
-**Then** the team is resolved to its GUID via `CoreApi.getTeam(project, team)` before the key is constructed; a team passed as a GUID skips the resolution round-trip
-
-**Given** a valid `{ project, team, iterationId }` where the extension has a stored goal
+**Given** a valid `{ team, iterationId }` (both GUIDs) where the extension has a stored goal
 **When** the tool fetches the document at `${extmgmtBase}/_apis/ExtensionManagement/InstalledExtensions/keesschollaart/sprint-goal/Data/Scopes/Default/Current/Collections/%24settings/Documents/sprintConfig.${iterationId[0:15]}${teamId[0:15]}?api-version=7.1-preview.1`
 **Then** it returns the stored `value` object (including `goal`, `details`, `detailsPlain`, `goalAchieved`) as JSON
 
-**Given** the document does not exist, the extension is not installed, or the PAT lacks `vso.extension.data`
+**Given** the document does not exist (no goal set for this team/iteration pair, or extension not installed)
 **When** the tool runs
-**Then** it returns the literal JSON `null` and does **not** set `isError: true`
+**Then** `typed-rest-client`'s 404-handling returns `{ statusCode: 404, result: null }` and the tool returns the literal JSON `null` without `isError: true`
 
-**Given** any other error (network failure, upstream 500, auth broken entirely)
+**Given** the PAT lacks `vso.extension.data`, the network fails, or the upstream returns 5xx
 **When** the tool runs
-**Then** it returns `{ isError: true, content: [{ type: "text", text: "Error: <verbatim message>" }] }` per project pattern
-
-**Given** an `AZDO_ORG_URL` with or without a trailing slash
-**When** the tool constructs the extmgmt URL
-**Then** the resulting URL has no double-slash in the path
+**Then** the thrown error surfaces as `{ isError: true, content: [{ type: "text", text: "Error: <verbatim message>" }] }` so the caller sees it — no soft-failure, no silent fallback
 
 **Given** the tool runs on a stock Node 24 setup with the repo's tsconfig
 **When** `pnpm type-check` runs
