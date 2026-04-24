@@ -2,7 +2,7 @@
 epic: 3
 stories: [3.1, 3.2]
 title: /azdo-create-ticket skill — baseline create + link branching (merged)
-status: In Progress
+status: Done
 merges: [3.1, 3.2]
 ---
 

@@ -2,7 +2,7 @@
 epic: 4
 story: 4.2
 title: /azdo-sprint-report narrative skill + writing-quality rule
-status: In Progress
+status: Done
 ---
 
 # Story 4.2 — `/azdo-sprint-report` narrative skill + writing-quality rule

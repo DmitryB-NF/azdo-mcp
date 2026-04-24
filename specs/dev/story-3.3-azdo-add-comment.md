@@ -2,7 +2,7 @@
 epic: 3
 story: 3.3
 title: /azdo-add-comment skill + project-wide comment-style rule
-status: In Progress
+status: Done
 ---
 
 # Story 3.3 — `/azdo-add-comment` skill + comment-style rule

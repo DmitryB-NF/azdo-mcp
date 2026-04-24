@@ -2,7 +2,7 @@
 epic: 4
 story: 4.1
 title: get_sprint_goal author tool (extension-data ingestion)
-status: In Progress
+status: Done
 ---
 
 # Story 4.1 — `get_sprint_goal` author tool

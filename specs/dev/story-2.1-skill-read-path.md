@@ -2,7 +2,7 @@
 epic: 2
 story: 2.1
 title: Skill-based read path with team coordinates
-status: In Progress
+status: Done
 replaces: [original 2.1 "get_work_item", original 2.2 "list_work_items"]
 ---
 
