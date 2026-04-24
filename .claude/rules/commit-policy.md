@@ -35,18 +35,23 @@ Every commit in this repository must follow this format. No exceptions.
 
 ## Body
 
-One blank line after the header, then:
+One blank line after the header, then a **compact** body built from two things only:
 
-1. **Paragraph 1 (required).** A clean explanation of **why** the change
-   was made — the intent and motivation. Never restate what the diff
-   shows; the reader already has the diff.
-2. **Paragraph 2+ (optional).** Only if the change has non-obvious
-   behaviour, dual intent, or consequences that cannot be inferred from
-   the code. Omit otherwise.
+1. **Purpose line (required).** One sentence on the *intent* — what this commit is for, what it unblocks, what bug it fixes. Not a restatement of the diff.
+2. **Optional bullet list of non-obvious notes.** Use bullets for multi-change commits where each change carries context the reader would not infer from the diff: a hidden trade-off, a breaking-change hint, the reason a rejected alternative was rejected, a downstream consequence, a subtle invariant. Skip this list entirely if everything is obvious from the diff.
 
-**Keep the body compact.** Match its length to the size and subtlety of the change. A small, obvious change can ship with a one-sentence body; only genuinely non-obvious context earns additional lines. Three paragraphs for a three-line diff is waste — resist the urge to document what the diff already shows or to pad with structure for its own sake.
+Never restate what the diff already shows. A reader with the diff open does not need "changed X.ts lines 4–12 to call Y instead of Z" — the diff says that. Write only what the diff does not say — intent and non-obvious context.
 
-Reserve blank lines for separating **major logical blocks** — typically the intent paragraph from a follow-up explanation block. Within a block, start each distinct point on its own line for readability, but **do not** put a blank line between them; sentences that develop the same thought stay together on one line. Meaning-based breaks within a tight block keep the body easy to scan and diff; blank lines only earn their place when the next chunk of prose is clearly a different topic.
+A small, obvious change ships with a one-line body. A bug fix with a subtle trade-off may earn a purpose line plus two bullets. A bundled refactor rarely earns more than three bullets. If the body is wider than the diff, the body is wrong.
+
+Reserve blank lines for separating **major logical blocks** — typically the purpose line from a follow-up block. Within a bullet list or a tight paragraph, keep items on consecutive lines without blank-line padding.
+
+### Body anti-patterns
+
+- **Diff restatement.** "Change X to Y. Update A to B. Refactor C to D." Everything the reader already gets for free from the diff.
+- **Padding.** Three paragraphs on a one-file typo fix; five bullets that all say "updated &lt;file&gt;" without a reason that matters.
+- **PR-description prose.** Narrative reading when the diff is self-evident. That belongs in a PR description or a dev-spec, not git history.
+- **Exhaustive "what" with no "why".** Listing every hunk by name and never saying why any of it matters.
 
 See [`review-gate.md`](review-gate.md) for the pre-commit approval workflow that applies to every commit in addition to the rules below.
 
