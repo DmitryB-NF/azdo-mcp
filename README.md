@@ -40,7 +40,7 @@ All three layers share one PAT and one tool namespace, so the host sees a single
 
 ## Skills
 
-Four ready-to-use Markdown skills under `.claude/skills/azdo-*/`:
+Four ready-to-use Markdown skills under `skills/azdo-*/`:
 
 - **`azdo-fetch-tickets`** — fetch one or many work items by ID, iteration, or compound criteria; render as Markdown.
 - **`azdo-create-ticket`** — draft and create a new work item, optionally linked to existing ones; previews the payload and waits for explicit approval before writing.
@@ -51,7 +51,7 @@ Every write-path skill follows the same pattern: gather inputs, render a preview
 
 ## Conventions
 
-Repo-wide rules live in `.claude/rules/` and are auto-loaded by Claude Code. They cover:
+Repo-wide rules live in `rules/` and are auto-loaded by Claude Code (via `.claude/rules/` symlinks for in-repo development; pulled in by skills that reference them when the plugin is installed in another project). They cover:
 
 - **Mutation confirmation** — every write goes through preview + explicit approval.
 - **Comment style** — Markdown hygiene and ticket-reference conventions for posted comments.
@@ -91,6 +91,44 @@ pnpm inspect
 ```
 
 This opens a local web UI where you can browse and invoke every registered tool against your real Azure DevOps organisation.
+
+## Use as a plugin in another project
+
+This repo doubles as a Claude Code plugin. The plugin loads its own `node_modules` and reads credentials from its own `.env`, so consuming projects never need to touch dependencies or secrets.
+
+### One-time setup (in this repo)
+
+```bash
+pnpm install
+cp .env.example .env
+# fill in AZDO_ORG, AZDO_PAT, and the optional defaults
+```
+
+The plugin's MCP server boots with `node --env-file-if-exists=${CLAUDE_PLUGIN_ROOT}/.env`, so this `.env` is the single source of credentials for every consumer.
+
+### Enable the plugin in a target project
+
+Add two top-level keys to the consuming project's `.claude/settings.local.json` (gitignored, personal) or `.claude/settings.json` (committed, team-shared):
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "azdo-mcp": {
+      "source": {
+        "source": "directory",
+        "path": "/absolute/path/to/azdo-mcp"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "azdo@azdo-mcp": true
+  }
+}
+```
+
+Replace `/absolute/path/to/azdo-mcp` with the path to your clone. For machine-wide enablement across every project, put the same two keys in `~/.claude/settings.json` instead.
+
+Open the target project in Claude Code: the plugin loads on session start, surfacing the four skills and the `azdo` MCP server. At first run Claude Code prompts for the `AZDO_*` values; skip the dialog and the server falls back to a `.env` in the plugin source directory.
 
 ## Configuration
 

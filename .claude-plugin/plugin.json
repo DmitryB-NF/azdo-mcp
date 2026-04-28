@@ -1,0 +1,53 @@
+{
+  "name": "azdo",
+  "version": "0.1.0",
+  "description": "Azure DevOps Model Context Protocol server with skills for work-item read, create, comment, and sprint reporting.",
+  "author": {
+    "name": "DmitryB"
+  },
+  "userConfig": {
+    "AZDO_ORG": {
+      "type": "string",
+      "title": "Azure DevOps organisation",
+      "description": "Organisation slug, e.g. 'contoso' for https://dev.azure.com/contoso.",
+      "required": false
+    },
+    "AZDO_PAT": {
+      "type": "string",
+      "title": "Personal Access Token",
+      "description": "PAT with Work Items (Read & Write), Project & Team (Read), and optionally Extension Data (Read) for sprint-goal ingestion. Stored in the system keychain.",
+      "sensitive": true,
+      "required": false
+    },
+    "AZDO_USER_EMAIL": {
+      "type": "string",
+      "title": "User email",
+      "description": "Email associated with the PAT, used by skills that resolve @Me identity.",
+      "required": false
+    },
+    "AZDO_DEFAULT_PROJECT": {
+      "type": "string",
+      "title": "Default project",
+      "description": "Project name used when a tool call does not specify one.",
+      "required": false
+    },
+    "AZDO_DEFAULT_TEAM": {
+      "type": "string",
+      "title": "Default team",
+      "description": "Team name used for team-relative WIQL such as @CurrentIteration.",
+      "required": false
+    }
+  },
+  "mcpServers": {
+    "azdo": {
+      "command": "node",
+      "cwd": "${CLAUDE_PLUGIN_ROOT}",
+      "args": [
+        "--env-file-if-exists=${CLAUDE_PLUGIN_ROOT}/.env",
+        "--import",
+        "tsx",
+        "${CLAUDE_PLUGIN_ROOT}/src/index.ts"
+      ]
+    }
+  }
+}

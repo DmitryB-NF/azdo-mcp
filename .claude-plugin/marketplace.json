@@ -1,0 +1,13 @@
+{
+  "name": "azdo-mcp",
+  "owner": {
+    "name": "DmitryB"
+  },
+  "plugins": [
+    {
+      "name": "azdo",
+      "source": "./",
+      "description": "Azure DevOps MCP server with skills for work-item read, create, comment, and sprint reporting."
+    }
+  ]
+}

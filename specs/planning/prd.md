@@ -1,7 +1,11 @@
 ---
-stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain-skipped', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete']
+stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain-skipped', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit']
 status: 'complete'
 completed: '2026-04-21'
+lastEdited: '2026-04-28'
+editHistory:
+  - date: '2026-04-28'
+    changes: 'Add Plugin Distribution FR group (FR33–FR36) covering Claude Code plugin packaging; extend Product Scope MVP infrastructure with plugin packaging bullet; add Layer 2b plugin-manifest sub-block to cli_tool-Specific Requirements Config Schema.'
 inputDocuments:
   - specs/planning/research/technical-azure-devops-mcp-market-scan-research-2026-04-21.md
   - specs/planning/product-brief-azdo-mcp.md
@@ -150,6 +154,7 @@ Additional skills will ship in follow-up epics (e.g., `/azdo-prep-standup`, `/az
 - `.env` file with real configuration values; listed in `.gitignore` from the first commit. No separate `.env.example` template — simpler for a local personal tool.
 - PAT scopes documented in README: Work Items (Read & Write), Wiki (Read & Write), Project & Team (Read).
 - GitHub repo (currently private). No `LICENSE` file at MVP — licensing decision deferred until / if the project goes public.
+- Claude Code plugin packaging (`.claude-plugin/plugin.json` + `marketplace.json`). Other projects install via two `settings.json` keys (`extraKnownMarketplaces` + `enabledPlugins`); the plugin's MCP server resolves paths through `${CLAUDE_PLUGIN_ROOT}` and reads credentials from the plugin's own `.env`.
 - Unit test coverage: none mandatory at MVP. Pure functions (if introduced) may be tested with Node's native test runner; tests are opt-in, not required.
 
 ### Growth Features (Post-MVP, no commitments)
@@ -357,6 +362,10 @@ Validated on startup (`src/config.ts`): missing keys → fail fast with clear er
 
 No secrets in `.mcp.json`. Host registration is pure process-spawn metadata.
 
+**Layer 2b — plugin manifest (`.claude-plugin/plugin.json`, used when installed as a Claude Code plugin):**
+
+The same MCP server can be invoked through the plugin path. The manifest declares `mcpServers.azdo` with `node --env-file-if-exists=${CLAUDE_PLUGIN_ROOT}/.env --import tsx ${CLAUDE_PLUGIN_ROOT}/src/index.ts`. Consumers add two `settings.json` keys in their own project to register and enable the plugin (see README §"Use as a plugin in another project"). No `.mcp.json` is required in the consuming project — the plugin manifest provides the equivalent registration.
+
 ### Authentication Model
 
 - **Primary:** PAT via `azure-devops-node-api`'s `getPersonalAccessTokenHandler(token)` — emits `Authorization: Basic base64("PAT:"+token)` on each request.
@@ -437,6 +446,13 @@ The following FR set defines the complete capability contract for AzDo MCP MVP. 
 - **FR30:** Each MCP tool can return either a success response (content blocks) or an error response with the `isError` flag set.
 - **FR31:** When an Azure DevOps API call fails, the system can propagate the raw error message through the MCP response so Claude can surface it to the user.
 - **FR32:** The system can enforce stdout discipline: JSON-RPC messages only on stdout; all diagnostic logging on stderr.
+
+### Plugin Distribution
+
+- **FR33:** The system can be installed as a Claude Code plugin in another project via declarative `settings.json` keys (`extraKnownMarketplaces` registering a directory-source marketplace + `enabledPlugins` activating `azdo@<marketplace-name>`), surfacing the four MVP skills and the `azdo` MCP server in that project's session.
+- **FR34:** The plugin manifest at `.claude-plugin/plugin.json` declares the MCP server with `${CLAUDE_PLUGIN_ROOT}`-relative paths, so the consuming project invokes the server without hard-coding the source directory.
+- **FR35:** The plugin reads credentials from a `.env` file in the plugin root via `--env-file-if-exists`; consuming projects supply no secret material of their own.
+- **FR36:** The plugin layout co-locates canonical files at the plugin root (`skills/`, `rules/`) with `.claude/` symlinks preserving in-repo skill/rule auto-loading during plugin development.
 
 ## Non-Functional Requirements
 
