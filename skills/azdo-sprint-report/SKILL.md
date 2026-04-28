@@ -37,11 +37,10 @@ Invocation is natural language; no structured arguments.
 2. `get_sprint_goal` returns non-null — use `goal` as the anchor sentence, `detailsPlain` for paragraph themes.
 3. Neither — ask once: "What are the goals for the current sprint?" If the user insists there are no explicit goals, generate the Goals section from current-iteration ticket themes alone; do not fabricate a goal.
 
-## Workflow and supporting references
+## Workflow
 
-The skill is split into the entry contract above and two working files. **Read each via the Read tool when its scope becomes relevant** — work from the file, not from memory:
+Follow the instructions in [`workflow.md`](workflow.md) and [`style.md`](style.md).
 
-- [`workflow.md`](workflow.md) — the full call sequence (§1–9), error branches, and the publish path.
-- [`style.md`](style.md) — the report body's structure, voice, anti-patterns, and the narrative-shape don'ts. Read before §5 (drafting) and again during §7 (edit loop) of [`workflow.md`](workflow.md).
+## Shape, at a glance
 
-The shape, at a glance: resolve coordinates → fetch iterations → fetch goals → fetch tickets → identify themes and draft → preview → edit loop → publish decision (optional) → reply with deep link.
+Resolve coordinates → fetch iterations → fetch goals → fetch tickets → identify themes and draft → preview → edit loop → publish decision (optional) → reply with deep link.

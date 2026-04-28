@@ -7,6 +7,10 @@ description: Draft and create a new Azure DevOps work item — Bug, Task, User S
 
 Turn a short conversational request into an approved Azure DevOps work-item create — optionally pre-wired with typed links — in a single turn. No browser. No guesses. No unapproved mutations.
 
+## Workflow
+
+Follow the instructions in [`workflow.md`](workflow.md) and [`field-reference.md`](field-reference.md). If the user named link targets, also follow [`link-validation.md`](link-validation.md).
+
 ## Applicable rules
 
 This skill composes on top of the repo-wide rules and does not restate them:
@@ -14,12 +18,6 @@ This skill composes on top of the repo-wide rules and does not restate them:
 - [`mutation-confirmation.md`](../../rules/mutation-confirmation.md) — preview, edit loop, explicit-verb gate before the create, honest partial-failure reporting.
 - [`writing-quality.md`](../../rules/writing-quality.md) — British English re-read of every drafted field before the preview is shown.
 
-## Workflow and supporting references
+## Shape, at a glance
 
-The skill is split into the entry contract above and three working files. **Read each via the Read tool when its scope becomes relevant in the current invocation** — work from the file, not from memory:
-
-- [`workflow.md`](workflow.md) — the call sequence (§1–8), errors before the create, and the cross-cutting flow.
-- [`field-reference.md`](field-reference.md) — full specifications of mandatory and optional fields, plus the empirically verified format rules for `wit_create_work_item`. Read before drafting (§3 Draft) and before composing the mutate payload (§7 Mutate).
-- [`link-validation.md`](link-validation.md) — link-intent extraction, deduplication, conflict detection, the all-or-nothing pre-validation gate, and partial-failure handling for the linking phase. Read when the user names link targets.
-
-The shape, at a glance: resolve coordinates → optional context-read → draft → optional link intent → preview → edit loop → mutate → reply.
+Resolve coordinates → optional context-read → draft → optional link intent → preview → edit loop → mutate → reply.

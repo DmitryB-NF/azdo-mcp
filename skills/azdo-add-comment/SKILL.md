@@ -24,6 +24,10 @@ On success the skill replies in free natural language, tuned to the moment, with
 
 Build the link as `${orgUrl}/${project}/_workitems/edit/${workItemId}?focusedCommentId=${commentId}` from `{ orgUrl, project, workItemId, commentId }` — never use the MS tool's response `url`, which is a REST API URL, not a UI link. Embed it as a Markdown hyperlink in the confirmation. How the link is phrased ("posted — jump to it", "done, see [the comment](...)", etc.) is up to the moment; only the link itself is mandatory. No rigid template.
 
+## Workflow
+
+Follow the instructions in [`workflow.md`](workflow.md).
+
 ## Applicable rules
 
 This skill composes on top of the repo-wide rules and does not restate them:
@@ -32,8 +36,6 @@ This skill composes on top of the repo-wide rules and does not restate them:
 - [`azdo-comment-style.md`](../../rules/azdo-comment-style.md) — Markdown hygiene, body shape, empty-body refusal, explicit `format` parameter.
 - [`writing-quality.md`](../../rules/writing-quality.md) — British English re-read before the preview is shown.
 
-## Workflow
+## Shape, at a glance
 
-The detailed call sequence, error paths, and skill-specific constraints live in [`workflow.md`](workflow.md). **Read that file via the Read tool before drafting** — work from the file, not from memory of past invocations; it is the source of truth and may have changed.
-
-The shape, at a glance: resolve coordinates → enrich target → validate body → normalise and preview → edit loop → mutate → reply with deep links.
+Resolve coordinates → enrich target → validate body → normalise and preview → edit loop → mutate → reply with deep links.

@@ -49,19 +49,6 @@ Four ready-to-use Markdown skills under `skills/azdo-*/`:
 
 Every write-path skill follows the same pattern: gather inputs, render a preview, wait for an explicit verb ("post", "create", "approved"), then mutate. Silence is never approval.
 
-## Conventions
-
-Repo-wide rules live in `rules/` and are auto-loaded by Claude Code (via `.claude/rules/` symlinks for in-repo development; pulled in by skills that reference them when the plugin is installed in another project). They cover:
-
-- **Mutation confirmation** — every write goes through preview + explicit approval.
-- **Comment style** — Markdown hygiene and ticket-reference conventions for posted comments.
-- **Writing quality** — British English floor for every generated artefact.
-- **Commit policy** — conventional-commit headers, compact body shape, no AI co-author trailers.
-- **Review gate** — explicit human approval before every commit.
-- **MCP connection contract** — `mcp__azdo__*` naming, no REST backchannel from skills.
-
-If you fork this repo for your own use, treat these rules as a starting point, not gospel.
-
 ## Requirements
 
 - **Node.js 24 LTS** or later.
