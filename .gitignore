@@ -1,3 +1,6 @@
+# Dependencies — install artefact, regenerated from package.json + lockfile.
+node_modules/
+
 # Environment / secrets — placeholder .env was committed once for variable
 # discoverability; real values are populated locally and must never land here.
 .env
