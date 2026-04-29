@@ -131,8 +131,4 @@ All configuration lives in a single `.env` file at the repo root:
 
 Real secrets stay on your machine. The server reads `.env` via Node's native `--env-file` flag — no `dotenv` dependency, no host-config secret material.
 
-## Licence
-
-To be decided before the first tagged release. Until then, the repository is published for inspection only.
-
 ### _Built with BMAD._
